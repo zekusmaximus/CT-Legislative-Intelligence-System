@@ -4,14 +4,13 @@
 Build a deterministic legislative monitoring system for CT General Assembly file copies.
 Do not implement this as an autonomous chatbot.
 
-## Build order
-1. Schemas and config
-2. Collectors and persistence
-3. PDF extraction and section parsing
-4. Metadata enrichment and version diffing
-5. Subject tagging and client scoring
-6. Summaries and Telegram alerts
-7. API and dashboard support
+## Current MVP priority order
+1. Persistence and Alembic migrations
+2. Metadata enrichment and controlled vocabularies
+3. Deterministic client scoring and alert decision persistence
+4. Telegram sending and suppression logic
+5. Internal API and scheduler support
+6. Hardening, regression coverage, and post-MVP intelligence layers
 
 ## Rules
 - Use Python 3.12+
@@ -35,3 +34,9 @@ Do not implement this as an autonomous chatbot.
 - All JSON must be validated before persistence
 - Never include full client names in prompts unless explicitly configured
 - Prefer internal client IDs and abstracted interest summaries
+
+## Agent workflow guidance
+- Read `PLAN.md` before starting any major implementation tranche.
+- Use `docs/production-readiness-review.md` to understand why MVP priorities are ordered the way they are.
+- Treat embeddings, broader LLM reasoning, and dashboard work as post-MVP unless the task explicitly requires them.
+- Favor narrow, test-backed increments that make the system more queryable, auditable, and deterministic.
