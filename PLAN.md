@@ -1,195 +1,270 @@
-# Implementation Plan: CT Legislative Intelligence System
+# MVP Implementation Plan: CT Legislative Intelligence System
 
-## Current State
-- Empty repo with only `README.md` and `docs/` (build-spec.md + technical-contract.md)
-- On branch `claude/plan-app-development-yvDpE`
-- Python 3.12+ project using the spec's recommended stack
+## Purpose
 
----
+This plan translates the findings in `docs/production-readiness-review.md` into a phased, execution-ready roadmap for coding agents. It replaces the earlier greenfield scaffold plan, which no longer reflects the repository's actual state.
 
-## Pass 1: Skeleton, Config & Schemas
+The goal is to move the repository from **"promising prototype"** to **"traceable, internally deployable MVP"** by prioritizing persistence, controlled vocabularies, operational APIs, and deterministic alerting before any optional intelligence layers.
 
-### 1.1 Project scaffold
-- Create `pyproject.toml` with dependencies: FastAPI, SQLAlchemy, Pydantic v2, PyMuPDF, BeautifulSoup4, httpx, APScheduler, python-telegram-bot, alembic, psycopg, rapidfuzz
-- Dev deps: pytest, ruff, mypy, pytest-asyncio
-- Create `Makefile` with targets: setup, lint, typecheck, test, run-api, run-worker
-- Create `.env.example` with all required env vars from technical contract §4.1
-- Create `AGENTS.md` per spec §21
+## Planning principles
 
-### 1.2 Typed config loader
-- `config/settings.py` — Pydantic Settings class loading from env vars
-- Fail-fast on missing `DATABASE_URL`
-- Optional Telegram/LLM credentials with feature flags
-
-### 1.3 Controlled taxonomy YAML files
-- `config/taxonomy.subjects.yaml` — 27 subject tags from technical contract §5.1
-- `config/taxonomy.change_flags.yaml` — 25 change flags from §5.2
-- `config/taxonomy.urgency.yaml` — 4 urgency levels from §5.3
-- `config/clients.example.yaml` — Via Transportation example profile from §12.1
-
-### 1.4 Pydantic v2 schemas
-- `src/schemas/intake.py` — SourcePageRecord, FileCopyListingRow
-- `src/schemas/bills.py` — BillRecord, FileCopyRecord
-- `src/schemas/extraction.py` — PageText, SectionSpan, ExtractedDocument
-- `src/schemas/diff.py` — SectionDelta, ChangeEvent, BillDiffResult
-- `src/schemas/scoring.py` — SubjectTagResult, ClientMatchReason, ClientScoreResult
-- `src/schemas/summary.py` — InternalSummary, TelegramAlertPayload
-- All per technical contract §6
-
-### 1.5 SQLAlchemy models & Alembic
-- `src/db/models.py` — All tables from technical contract §7 (source_pages, bills, file_copies, bill_text_extractions, bill_text_pages, bill_sections, bill_diffs, bill_change_events, clients, client_interest_profiles, client_bill_scores, alerts, feedback_labels)
-- `src/db/session.py` — Engine/session factory
-- `alembic.ini` + `migrations/` — Initial migration generating all tables
-- Support SQLite for dev/testing and PostgreSQL for production
-
-### 1.6 Utility modules
-- `src/utils/bill_id.py` — Bill ID normalization (HB/SB + 5-digit zero-pad) and canonical version ID generation (`{year}-{bill_id}-FC{fc:05d}`)
-
-### 1.7 Tests for Pass 1
-- `tests/unit/test_bill_id.py` — Normalization edge cases
-- `tests/unit/test_schemas.py` — Schema validation with sample payloads
-- `tests/unit/test_settings.py` — Config loader behavior
-
-### 1.8 Package structure `__init__.py` files
-- Create `src/__init__.py`, `src/schemas/__init__.py`, `src/db/__init__.py`, `src/utils/__init__.py`, etc.
+1. **System of record before polish.** Persist extraction, diff, scoring, and alert artifacts before expanding UI or agentic behavior.
+2. **Deterministic before probabilistic.** Finish rules-based collection, extraction, alignment, scoring, and alerting before embeddings or broader LLM use.
+3. **Contract compliance over feature count.** Runtime outputs must use approved enums, validated schemas, and idempotent writes.
+4. **Operational traceability is mandatory.** Every alert decision must be inspectable through stored artifacts and minimal internal APIs.
+5. **Small, test-backed tranches.** Each phase should end in a testable capability that future agents can extend safely.
 
 ---
 
-## Pass 2: Collectors & Persistence
+## Current repository snapshot
 
-### 2.1 Daily file-copy collector
-- `src/collectors/cga_daily_filecopies.py` — Fetch and parse daily CGA file-copy page
-- HTML parsing with BeautifulSoup
-- Extract: bill number, title, file copy number, PDF link
-- Normalize bill IDs per §8.1
+### What is already in place
+- Python project scaffold with typed settings, test harness, and Makefile.
+- SQLAlchemy models for the core domain tables.
+- Daily and session-wide collectors plus bill-status parsing.
+- PDF download, text extraction, normalization, confidence scoring, and section parsing.
+- Basic diffing, subject tagging, simplified scoring, deterministic summary generation, and Telegram formatting.
+- Pipeline orchestration tests demonstrating a narrow happy-path flow.
 
-### 2.2 All-file-copy reconciliation collector
-- `src/collectors/cga_all_filecopies.py` — Fetch session-wide listing for backfill
-- Gap detection against existing records
+### What is still blocking MVP
+- No Alembic revision history.
+- No persistence for extracted text, sections, diffs, scores, summaries, or alerts.
+- Runtime vocabularies do not fully enforce the technical contract enums.
+- Bill-status enrichment is not fully wired into the end-to-end pipeline.
+- Alert sending, suppression, and per-client decision persistence are incomplete.
+- API surface is effectively limited to health checks.
+- Operational logging, scheduling, and review flows are incomplete.
 
-### 2.3 Bill-status collector
-- `src/collectors/cga_bill_status.py` — Fetch bill info pages for title, committee, status
-
-### 2.4 PDF downloader
-- `src/collectors/pdf_downloader.py` — Download PDFs with idempotency (skip if sha256 exists)
-- Local file storage adapter in `src/utils/storage.py`
-
-### 2.5 Repository/persistence layer
-- `src/db/repositories/bills.py` — CRUD for bills table
-- `src/db/repositories/file_copies.py` — CRUD with duplicate detection
-- `src/db/repositories/source_pages.py` — Source page audit trail
-
-### 2.6 Tests for Pass 2
-- HTML fixture files in `data/fixtures/` (saved sample CGA pages)
-- `tests/unit/test_daily_collector.py` — Parser tests against fixtures
-- `tests/unit/test_all_filecopies_collector.py`
-- `tests/integration/test_persistence.py` — DB round-trip tests
+### Delivery target
+The next milestone is an **internal MVP** that can:
+1. ingest file copies,
+2. extract and persist structured legislative text,
+3. diff against prior versions,
+4. score relevance deterministically against validated client profiles,
+5. persist alert decisions and send Telegram alerts with suppression rules, and
+6. expose enough API surface to inspect and re-run work.
 
 ---
 
-## Pass 3: Extraction & Parsing
+## Phase 0 - Repository alignment and execution contract
 
-### 3.1 PDF text extraction
-- `src/extract/pdf_text.py` — PyMuPDF-based text extraction
-- `src/extract/ocr_fallback.py` — Tesseract OCR for low-confidence pages
+### Objective
+Make the repository self-describing so coding agents can continue safely without rediscovering priorities.
 
-### 3.2 Extraction confidence scoring
-- `src/extract/confidence.py` — Heuristic per technical contract §10.2 (text ratio, legislative patterns, OCR garbage detection)
+### Scope
+- Rewrite planning docs to match the actual repository state.
+- Define MVP scope explicitly and mark post-MVP items.
+- Document current architecture, operating assumptions, and build order.
+- Keep agent instructions aligned with deterministic pipeline goals.
 
-### 3.3 Text normalization
-- `src/extract/normalize_text.py` — Header/footer removal, page number stripping, hyphenation repair, whitespace collapse per §10.3
+### Exit criteria
+- `PLAN.md`, `README.md`, and core docs reflect the current implementation state.
+- Future agents can identify the next build tranche without reading the full review.
 
-### 3.4 Section parser
-- `src/extract/section_parser.py` — Detect "Section X" / "Sec. X" boundaries, effective-date sections, definition blocks, appropriation blocks per §10.4
-- Fallback paragraph chunking with deterministic IDs
-
-### 3.5 Tests for Pass 3
-- Sample PDF fixtures in `data/samples/`
-- `tests/unit/test_pdf_extraction.py`
-- `tests/unit/test_normalize.py`
-- `tests/unit/test_section_parser.py`
+### Status
+- **In progress with this revision.**
 
 ---
 
-## Pass 4: Diffing & Enrichment
+## Phase 1 - Persistence baseline and migration history
 
-### 4.1 Prior-version resolver
-- `src/diff/prior_version.py` — Find previous file copy for same bill per §11.1
+### Objective
+Turn the prototype into a real system of record.
 
-### 4.2 Section aligner
-- `src/diff/align_sections.py` — Exact match → fuzzy heading match → semantic text similarity per §11.2
+### Required deliverables
+1. Create the **initial Alembic revision** for existing ORM tables.
+2. Stop relying on ad hoc `create_all()` flows for normal app setup.
+3. Add repositories/services for:
+   - `bill_text_extractions`
+   - `bill_text_pages`
+   - `bill_sections`
+   - `bill_diffs`
+   - `bill_change_events`
+4. Persist extraction outputs and diff outputs during pipeline execution.
+5. Add integration tests proving a processed file copy can be queried after persistence.
 
-### 4.3 Deterministic change classifier
-- `src/diff/classify_changes.py` — Rule-based detection of effective date changes, added/removed sections, appropriation language, penalty changes, shall/may changes per §11.4
+### Notes for agents
+- Keep writes idempotent and keyed by canonical version identifiers.
+- Preserve raw artifacts and normalized artifacts separately.
+- Treat this phase as the highest-priority coding tranche.
 
-### 4.4 Diff persistence
-- Store BillDiffResult and ChangeEvent records
+### Exit criteria
+- A newly processed file copy produces durable extraction and diff records.
+- `alembic upgrade head` can initialize a clean environment.
+- Tests cover repeat processing without duplicate rows.
 
-### 4.5 Tests for Pass 4
-- Two-version bill fixtures for diff testing
-- `tests/unit/test_section_alignment.py`
-- `tests/unit/test_change_classification.py`
-
----
-
-## Pass 5: Scoring, Summaries & Alerts
-
-### 5.1 Client profile loader
-- `src/scoring/client_profiles.py` — Load and validate YAML profiles per §12
-
-### 5.2 Rules engine
-- `src/scoring/rules_engine.py` — Deterministic scoring with weights from §13.1
-
-### 5.3 Embeddings integration (post-MVP)
-- `src/scoring/embeddings.py` — Cosine similarity mapping per §13.2
-
-### 5.4 LLM wrappers
-- `src/llm/prompts.py` — System/user prompt templates per §14
-- `src/llm/schemas.py` — Response validation models
-- `src/llm/summarize.py` — Summary generation with strict JSON validation
-- `src/llm/relevance.py` — Client relevance scoring
-
-### 5.5 Final score blending
-- `src/scoring/relevance.py` — Weighted combination per §13.4, urgency mapping per §13.5
-
-### 5.6 Telegram alerts
-- `src/alerts/telegram.py` — Bot API integration
-- `src/alerts/templates.py` — Immediate + digest templates per §15
-- `src/alerts/routing.py` — Disposition logic, suppression, dedup per §13.6
-
-### 5.7 Tests for Pass 5
-- `tests/unit/test_rules_engine.py`
-- `tests/unit/test_scoring.py`
-- `tests/unit/test_alert_suppression.py`
+### Status
+- **Top-priority MVP blocker.**
 
 ---
 
-## Pass 6: API, Jobs & Dashboard
+## Phase 2 - Metadata enrichment and contract-compliant vocabularies
 
-### 6.1 FastAPI endpoints
-- `apps/api/main.py` — All endpoints from §16.1 (health, jobs, bills, versions, alerts, feedback)
+### Objective
+Ensure pipeline outputs comply with the technical contract and are ready for scoring.
 
-### 6.2 Job orchestration
-- `apps/worker/jobs.py` — APScheduler-based job runner per §17
-- Full pipeline chain per §17.2
+### Required deliverables
+1. Wire **bill-status enrichment** into the orchestration path before scoring.
+2. Load and enforce approved taxonomy values from config files at runtime.
+3. Replace ad hoc subject tags and change flags with controlled vocabulary outputs only.
+4. Fail fast on unknown or invalid enum values.
+5. Add tests proving taggers/classifiers cannot emit unsupported values.
 
-### 6.3 Pipeline service
-- `src/services/pipeline.py` — Orchestrates the 15-step job chain for a new file copy
+### Exit criteria
+- Enriched bill metadata is persisted before scoring/alerting.
+- Runtime outputs match the controlled vocabularies in `docs/technical-contract.md`.
+- Diff/change artifacts are consistent enough for downstream alert logic.
 
-### 6.4 Logging & audit
-- Structured JSON logging per §18
+### Status
+- **Immediate follow-on after Phase 1.**
 
 ---
 
-## Implementation Priority (MVP Focus)
+## Phase 3 - Deterministic client scoring and alert decisioning
 
-Per spec §17 (MVP scope), build in this order and stop when functional:
+### Objective
+Make relevance scoring trustworthy enough for internal pilot use.
 
-1. **Pass 1** — Scaffold + schemas + config + tests (foundation)
-2. **Pass 2** — Collectors + PDF download + persistence (data ingestion)
-3. **Pass 3** — Text extraction + section parsing (content pipeline)
-4. **Pass 4** — Diffing + change detection (intelligence layer)
-5. **Pass 5** — Rules scoring + LLM summary + Telegram alerts (output)
-6. **Pass 6** — API + jobs + dashboard (operations)
+### Required deliverables
+1. Implement a validated **YAML client-profile loader**.
+2. Replace the placeholder scorer with a contract-aligned deterministic rules engine.
+3. Persist per-client score breakdowns, reasons, urgency, and dispositions.
+4. Implement alert suppression rules:
+   - below-threshold suppression,
+   - duplicate suppression,
+   - cooldown handling,
+   - digest vs immediate routing.
+5. Add tests covering positive, negative, and suppression cases.
 
-MVP excludes: full dashboard, OCR for all files, embeddings scoring, feedback UI, historical backfill beyond test corpus.
+### Explicit non-goals for this phase
+- Embeddings-based relevance.
+- Broad LLM reasoning for client relevance.
+
+### Exit criteria
+- Each processed version has persisted per-client scoring outputs.
+- Alert decisions are explainable from stored reasons and citations.
+- False-positive control is manageable for internal use.
+
+### Status
+- **MVP-critical.**
+
+---
+
+## Phase 4 - Summary generation and Telegram delivery
+
+### Objective
+Produce actionable outputs and deliver them reliably.
+
+### Required deliverables
+1. Persist internal summaries and alert payloads.
+2. Implement Telegram sending via Bot API.
+3. Ensure alert payloads include:
+   - bill number/title,
+   - file-copy version,
+   - client/disposition context,
+   - concise reasons,
+   - links to PDF and bill page.
+4. Add delivery logging and retry-safe send behavior.
+5. Keep summary generation deterministic unless a schema-validated LLM path is explicitly enabled.
+
+### Exit criteria
+- Telegram alerts send successfully in enabled environments.
+- Alert records are persisted with delivery state.
+- Users can inspect why a message was or was not sent.
+
+### Status
+- **MVP-critical.**
+
+---
+
+## Phase 5 - Operational API, jobs, and auditability
+
+### Objective
+Make the MVP operable during session without direct database access.
+
+### Required deliverables
+1. Expand FastAPI with a minimal internal operations surface:
+   - `GET /health`
+   - `POST /jobs/collect/daily`
+   - `POST /jobs/process/{canonical_version_id}`
+   - `GET /versions/{canonical_version_id}`
+   - `GET /alerts`
+2. Add scheduler/job orchestration for session polling and digest runs.
+3. Introduce structured logging and run-level audit records.
+4. Add tests for API responses and orchestration idempotency.
+
+### Exit criteria
+- Operators can trigger collection and inspect outputs through the API.
+- Scheduled runs follow session-aware cadence rules.
+- Logs support debugging and post-run review.
+
+### Status
+- **Required for internal deployability, but after Phases 1-4.**
+
+---
+
+## Phase 6 - Hardening and pilot readiness
+
+### Objective
+Prepare the MVP for sustained internal use during the legislative session.
+
+### Required deliverables
+1. Regression fixtures covering low-quality OCR, multi-version diffs, no-alert, immediate-alert, and digest-only scenarios.
+2. Acceptance tests for duplicate suppression, taxonomy compliance, and persisted outputs.
+3. Improved section alignment and change classification thresholds.
+4. Monitoring, error budgets, and runbook notes.
+5. Optional review dashboard and feedback capture only after APIs and persistence are stable.
+
+### Exit criteria
+- The system can run during session with predictable behavior.
+- Core outputs are reproducible, inspectable, and test-backed.
+- Operational issues can be diagnosed quickly.
+
+### Status
+- **Production-minded pilot target.**
+
+---
+
+## Post-MVP roadmap
+
+Only begin these items after the internal MVP is stable:
+- embeddings-based client matching,
+- LLM-generated summaries/relevance reasoning with strict JSON validation,
+- dashboard/review UX,
+- feedback-driven calibration workflows,
+- broader backfill and historical analytics.
+
+These are valuable, but they should not displace the persistence, scoring, and alerting work that makes the system usable.
+
+---
+
+## Recommended next coding tranche
+
+### Tranche name
+**Persist the intelligence layer and make it queryable.**
+
+### In-scope tasks
+1. Create the initial Alembic revision.
+2. Add repositories/services for persisted extraction and diff artifacts.
+3. Wire those writes into pipeline extraction and diff execution.
+4. Add `GET /versions/{canonical_version_id}`.
+5. Add integration tests proving persisted outputs are queryable after processing.
+
+### Why this tranche comes next
+- It closes the largest gap between the current prototype and a usable MVP.
+- It unlocks auditability, downstream scoring persistence, and alert traceability.
+- It is narrow enough for a coding agent to implement safely in one focused pass.
+
+---
+
+## Working order for future agents
+
+When choosing the next task, prefer this order:
+1. Persistence and migrations.
+2. Controlled vocabularies and metadata enrichment.
+3. Deterministic scoring and alert decision persistence.
+4. Telegram sending and summary persistence.
+5. Operational APIs and scheduler.
+6. Hardening and post-MVP intelligence layers.
+
+If a task does not advance one of those steps, it is probably not the highest-value work for MVP.
