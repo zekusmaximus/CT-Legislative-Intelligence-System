@@ -1,0 +1,47 @@
+# Example client interest profile
+# Copy this file and customize for each client.
+
+client_id: client_via
+client_name: Via Transportation
+is_active: true
+alert_threshold: 78
+digest_threshold: 58
+watched_bills:
+  - SB00009
+subject_priorities:
+  transportation: 1.0
+  municipalities: 0.8
+  labor_employment: 0.4
+change_flag_priorities:
+  mandate_added: 1.0
+  rulemaking_authority_added: 0.8
+  funding_language_added: 0.7
+agency_keywords:
+  - Department of Transportation
+  - DOT
+  - OPM
+committee_keywords:
+  - Transportation Committee
+positive_keywords:
+  - microtransit
+  - dial-a-ride
+  - paratransit
+  - transit district
+  - mobility
+  - demand responsive
+  - rideshare
+  - transportation network company
+  - state-funded transportation
+negative_keywords:
+  - hospital rate setting
+  - cannabis establishment
+  - bicycle trail
+  - boating safety
+entities_of_interest:
+  - municipalities
+  - transit providers
+  - transportation network companies
+notes_for_reasoning: >
+  Client is highly sensitive to state-funded transit program structure,
+  municipal transportation authority, labor classification spillover,
+  procurement constraints, and pilot-program language.

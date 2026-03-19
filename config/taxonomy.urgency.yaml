@@ -1,0 +1,7 @@
+# CT CGA File Copy Agent — Urgency Taxonomy v1
+
+urgency_levels:
+  - low       # 0-39
+  - medium    # 40-59
+  - high      # 60-79
+  - critical  # 80-100

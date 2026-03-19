@@ -1,0 +1,32 @@
+# CT CGA File Copy Agent — Subject Taxonomy v1
+# These are the only allowed subject tags. Do not invent new values.
+
+subjects:
+  - health_care
+  - insurance
+  - labor_employment
+  - tax_revenue
+  - appropriations_budget
+  - municipalities
+  - housing
+  - energy_environment
+  - transportation
+  - cannabis
+  - gaming
+  - data_privacy
+  - artificial_intelligence
+  - education
+  - procurement
+  - licensing_regulation
+  - reimbursement_rate_setting
+  - civil_liability
+  - criminal_justice
+  - consumer_protection
+  - utilities
+  - land_use_zoning
+  - public_health
+  - social_services
+  - agriculture_food
+  - banking_financial_services
+  - professional_services
+  - state_agency_governance
