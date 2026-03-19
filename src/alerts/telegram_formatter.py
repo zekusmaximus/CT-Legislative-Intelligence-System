@@ -29,9 +29,9 @@ def build_alert_payload(
     """Build a TelegramAlertPayload from scoring and summary."""
     alert_text = format_alert_text(score, summary)
 
-    suppression_key = hashlib.sha256(
-        f"{score.client_id}:{score.version_id}".encode()
-    ).hexdigest()[:16]
+    suppression_key = hashlib.sha256(f"{score.client_id}:{score.version_id}".encode()).hexdigest()[
+        :16
+    ]
 
     return TelegramAlertPayload(
         client_id=score.client_id,

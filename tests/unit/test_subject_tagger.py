@@ -66,10 +66,7 @@ class TestSubjectTagger:
         assert len(result.subject_tags) >= 2
 
     def test_rationale_provided(self):
-        doc = _make_doc(
-            "Act about transportation and transit and vehicle "
-            "regulation."
-        )
+        doc = _make_doc("Act about transportation and transit and vehicle regulation.")
         result = tag_bill_version(doc)
         assert len(result.rationale) > 0
 

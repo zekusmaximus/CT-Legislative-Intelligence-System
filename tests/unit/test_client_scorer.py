@@ -27,14 +27,12 @@ class TestClientScorer:
         )
         tags = _make_tag_result()
         result = score_bill_for_client(
-            client, tags,
+            client,
+            tags,
             "A bill about transportation and transit services.",
         )
         assert result.rules_score > 0
-        assert any(
-            r.reason_code == "keyword_match"
-            for r in result.match_reasons
-        )
+        assert any(r.reason_code == "keyword_match" for r in result.match_reasons)
 
     def test_subject_match_scores_points(self):
         client = ClientProfile(
@@ -44,10 +42,7 @@ class TestClientScorer:
         tags = _make_tag_result(subjects=["transportation"])
         result = score_bill_for_client(client, tags, "Bill text.")
         assert result.rules_score > 0
-        assert any(
-            r.reason_code == "subject_match"
-            for r in result.match_reasons
-        )
+        assert any(r.reason_code == "subject_match" for r in result.match_reasons)
 
     def test_watched_bill_scores_points(self):
         client = ClientProfile(
@@ -57,10 +52,7 @@ class TestClientScorer:
         tags = _make_tag_result(bill_id="SB00093")
         result = score_bill_for_client(client, tags, "Bill text.")
         assert result.rules_score >= 20
-        assert any(
-            r.reason_code == "watched_bill"
-            for r in result.match_reasons
-        )
+        assert any(r.reason_code == "watched_bill" for r in result.match_reasons)
 
     def test_committee_match(self):
         client = ClientProfile(
@@ -69,7 +61,9 @@ class TestClientScorer:
         )
         tags = _make_tag_result()
         result = score_bill_for_client(
-            client, tags, "Bill text.",
+            client,
+            tags,
+            "Bill text.",
             committee="Transportation Committee",
         )
         assert result.rules_score >= 15
@@ -98,9 +92,9 @@ class TestClientScorer:
             change_flags=["effective_date_change"],
         )
         result = score_bill_for_client(
-            client, tags,
-            "A bill about transportation and transit for "
-            "vehicle regulation.",
+            client,
+            tags,
+            "A bill about transportation and transit for vehicle regulation.",
         )
         assert result.should_alert is True
         assert result.urgency in ("high", "critical")
@@ -115,8 +109,12 @@ class TestClientScorer:
         client = ClientProfile(
             client_id="c1",
             keywords=[
-                "transportation", "transit", "vehicle", "road",
-                "highway", "bridge",
+                "transportation",
+                "transit",
+                "vehicle",
+                "road",
+                "highway",
+                "bridge",
             ],
             subject_interests=["transportation", "environment"],
             watched_bills=["SB00093"],
@@ -127,9 +125,9 @@ class TestClientScorer:
             change_flags=["effective_date_change", "appropriation_change"],
         )
         result = score_bill_for_client(
-            client, tags,
-            "Transportation transit vehicle road highway bridge "
-            "regulation.",
+            client,
+            tags,
+            "Transportation transit vehicle road highway bridge regulation.",
             committee="Transportation Committee",
         )
         assert result.rules_score <= 100

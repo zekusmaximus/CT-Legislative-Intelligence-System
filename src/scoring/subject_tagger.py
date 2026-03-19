@@ -4,7 +4,6 @@ Assigns subject tags and change flags based on text content.
 Uses keyword/pattern matching as the rules-based layer.
 """
 
-
 from src.schemas.diff import BillDiffResult
 from src.schemas.extraction import ExtractedDocument
 from src.schemas.scoring import SubjectTagResult
@@ -12,44 +11,102 @@ from src.schemas.scoring import SubjectTagResult
 # Subject taxonomy with keyword patterns
 SUBJECT_TAXONOMY: dict[str, list[str]] = {
     "transportation": [
-        "transportation", "transit", "highway", "road",
-        "vehicle", "motor", "traffic", "bridge", "rail",
+        "transportation",
+        "transit",
+        "highway",
+        "road",
+        "vehicle",
+        "motor",
+        "traffic",
+        "bridge",
+        "rail",
     ],
     "education": [
-        "education", "school", "student", "teacher",
-        "university", "college", "curriculum", "tuition",
+        "education",
+        "school",
+        "student",
+        "teacher",
+        "university",
+        "college",
+        "curriculum",
+        "tuition",
     ],
     "healthcare": [
-        "health", "hospital", "medical", "insurance",
-        "medicaid", "medicare", "pharmaceutical", "mental health",
+        "health",
+        "hospital",
+        "medical",
+        "insurance",
+        "medicaid",
+        "medicare",
+        "pharmaceutical",
+        "mental health",
     ],
     "environment": [
-        "environment", "pollution", "emission", "climate",
-        "water quality", "waste", "conservation", "energy",
+        "environment",
+        "pollution",
+        "emission",
+        "climate",
+        "water quality",
+        "waste",
+        "conservation",
+        "energy",
     ],
     "housing": [
-        "housing", "landlord", "tenant", "rent",
-        "zoning", "affordable housing", "eviction",
+        "housing",
+        "landlord",
+        "tenant",
+        "rent",
+        "zoning",
+        "affordable housing",
+        "eviction",
     ],
     "taxation": [
-        "tax", "revenue", "assessment", "exemption",
-        "credit", "deduction", "income tax", "sales tax",
+        "tax",
+        "revenue",
+        "assessment",
+        "exemption",
+        "credit",
+        "deduction",
+        "income tax",
+        "sales tax",
     ],
     "labor": [
-        "employment", "wage", "worker", "labor",
-        "workplace", "unemployment", "benefits", "overtime",
+        "employment",
+        "wage",
+        "worker",
+        "labor",
+        "workplace",
+        "unemployment",
+        "benefits",
+        "overtime",
     ],
     "public_safety": [
-        "police", "fire", "emergency", "public safety",
-        "criminal", "law enforcement", "firearm", "gun",
+        "police",
+        "fire",
+        "emergency",
+        "public safety",
+        "criminal",
+        "law enforcement",
+        "firearm",
+        "gun",
     ],
     "technology": [
-        "technology", "data", "privacy", "cyber",
-        "artificial intelligence", "digital", "broadband",
+        "technology",
+        "data",
+        "privacy",
+        "cyber",
+        "artificial intelligence",
+        "digital",
+        "broadband",
     ],
     "government_operations": [
-        "government", "state agency", "procurement",
-        "audit", "transparency", "FOIA", "public records",
+        "government",
+        "state agency",
+        "procurement",
+        "audit",
+        "transparency",
+        "FOIA",
+        "public records",
     ],
 }
 
@@ -71,19 +128,13 @@ def tag_bill_version(
         hits = sum(1 for kw in keywords if kw.lower() in text_lower)
         if hits >= _MIN_HITS:
             tags.append(subject)
-            matched = [
-                kw for kw in keywords if kw.lower() in text_lower
-            ]
-            rationale.append(
-                f"{subject}: matched {', '.join(matched[:3])}"
-            )
+            matched = [kw for kw in keywords if kw.lower() in text_lower]
+            rationale.append(f"{subject}: matched {', '.join(matched[:3])}")
 
     # Extract change flags from diff result
     change_flags: list[str] = []
     if diff_result:
-        change_flags = list({
-            e.change_flag for e in diff_result.change_events
-        })
+        change_flags = list({e.change_flag for e in diff_result.change_events})
 
     # Confidence based on keyword coverage
     if tags:

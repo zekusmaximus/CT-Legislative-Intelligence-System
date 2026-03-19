@@ -24,9 +24,7 @@ def diff_documents(
     current_sections = {s.section_id: s for s in current.sections}
     prior_sections = {s.section_id: s for s in prior.sections}
 
-    all_ids = list(dict.fromkeys(
-        list(prior_sections.keys()) + list(current_sections.keys())
-    ))
+    all_ids = list(dict.fromkeys(list(prior_sections.keys()) + list(current_sections.keys())))
 
     deltas: list[SectionDelta] = []
     added = 0
@@ -38,26 +36,30 @@ def diff_documents(
         new_sec = current_sections.get(sid)
 
         if old_sec and not new_sec:
-            deltas.append(SectionDelta(
-                section_id=sid,
-                old_heading=old_sec.heading,
-                new_heading=None,
-                delta_type="removed",
-                old_text=old_sec.text,
-                new_text=None,
-                similarity_score=0.0,
-            ))
+            deltas.append(
+                SectionDelta(
+                    section_id=sid,
+                    old_heading=old_sec.heading,
+                    new_heading=None,
+                    delta_type="removed",
+                    old_text=old_sec.text,
+                    new_text=None,
+                    similarity_score=0.0,
+                )
+            )
             removed += 1
         elif new_sec and not old_sec:
-            deltas.append(SectionDelta(
-                section_id=sid,
-                old_heading=None,
-                new_heading=new_sec.heading,
-                delta_type="added",
-                old_text=None,
-                new_text=new_sec.text,
-                similarity_score=0.0,
-            ))
+            deltas.append(
+                SectionDelta(
+                    section_id=sid,
+                    old_heading=None,
+                    new_heading=new_sec.heading,
+                    delta_type="added",
+                    old_text=None,
+                    new_text=new_sec.text,
+                    similarity_score=0.0,
+                )
+            )
             added += 1
         else:
             assert old_sec is not None and new_sec is not None
@@ -68,15 +70,17 @@ def diff_documents(
                 delta_type = "modified"
                 modified += 1
 
-            deltas.append(SectionDelta(
-                section_id=sid,
-                old_heading=old_sec.heading,
-                new_heading=new_sec.heading,
-                delta_type=delta_type,
-                old_text=old_sec.text if delta_type != "unchanged" else None,
-                new_text=new_sec.text if delta_type != "unchanged" else None,
-                similarity_score=sim,
-            ))
+            deltas.append(
+                SectionDelta(
+                    section_id=sid,
+                    old_heading=old_sec.heading,
+                    new_heading=new_sec.heading,
+                    delta_type=delta_type,
+                    old_text=old_sec.text if delta_type != "unchanged" else None,
+                    new_text=new_sec.text if delta_type != "unchanged" else None,
+                    similarity_score=sim,
+                )
+            )
 
     return BillDiffResult(
         bill_id=current.canonical_version_id.rsplit("-", 1)[0]
@@ -136,7 +140,5 @@ def get_unified_diff(old_text: str, new_text: str, n: int = 3) -> str:
     """Generate a unified diff string for display."""
     old_lines = old_text.splitlines(keepends=True)
     new_lines = new_text.splitlines(keepends=True)
-    diff = difflib.unified_diff(
-        old_lines, new_lines, fromfile="prior", tofile="current", n=n
-    )
+    diff = difflib.unified_diff(old_lines, new_lines, fromfile="prior", tofile="current", n=n)
     return "".join(diff)

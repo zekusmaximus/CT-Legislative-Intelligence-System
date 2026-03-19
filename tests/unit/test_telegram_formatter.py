@@ -39,8 +39,7 @@ def _make_summary() -> InternalSummary:
         bill_id="SB00093",
         version_id="2026-SB00093-FC00044",
         one_sentence_summary=(
-            "AN ACT CONCERNING TRANSPORTATION — "
-            "updated with 1 section(s) added."
+            "AN ACT CONCERNING TRANSPORTATION — updated with 1 section(s) added."
         ),
         deep_summary="Detailed summary text.",
         key_sections_to_review=["Section 1", "Section 4"],
@@ -81,9 +80,7 @@ class TestTelegramFormatter:
         assert "Why this matters:" in text
 
     def test_build_payload(self):
-        payload = build_alert_payload(
-            _make_score(), _make_summary(), PDF_URL
-        )
+        payload = build_alert_payload(_make_score(), _make_summary(), PDF_URL)
         assert payload.client_id == "client1"
         assert payload.bill_id == "SB00093"
         assert payload.urgency == "high"
@@ -91,17 +88,11 @@ class TestTelegramFormatter:
         assert len(payload.alert_text) > 0
 
     def test_suppression_key_deterministic(self):
-        p1 = build_alert_payload(
-            _make_score(), _make_summary(), PDF_URL
-        )
-        p2 = build_alert_payload(
-            _make_score(), _make_summary(), PDF_URL
-        )
+        p1 = build_alert_payload(_make_score(), _make_summary(), PDF_URL)
+        p2 = build_alert_payload(_make_score(), _make_summary(), PDF_URL)
         assert p1.suppression_key == p2.suppression_key
 
     def test_telegram_markdown_formatted(self):
-        md = format_telegram_markdown(
-            _make_score(), _make_summary(), PDF_URL
-        )
+        md = format_telegram_markdown(_make_score(), _make_summary(), PDF_URL)
         assert "SB00093" in md
         assert "View PDF" in md

@@ -4,9 +4,7 @@ from src.diff.section_differ import diff_documents, get_unified_diff
 from src.schemas.extraction import ExtractedDocument, PageText, SectionSpan
 
 
-def _make_doc(
-    version_id: str, sections: list[SectionSpan]
-) -> ExtractedDocument:
+def _make_doc(version_id: str, sections: list[SectionSpan]) -> ExtractedDocument:
     full_text = "\n\n".join(s.text for s in sections)
     return ExtractedDocument(
         canonical_version_id=version_id,
@@ -26,9 +24,7 @@ def _make_doc(
     )
 
 
-def _make_section(
-    section_id: str, heading: str, text: str
-) -> SectionSpan:
+def _make_section(section_id: str, heading: str, text: str) -> SectionSpan:
     return SectionSpan(
         section_id=section_id,
         heading=heading,
@@ -42,18 +38,19 @@ def _make_section(
 
 class TestSectionDiffer:
     def test_no_prior_all_added(self):
-        doc = _make_doc("2026-SB00093-FC00044", [
-            _make_section("sec_1", "Section 1", "First section text"),
-            _make_section("sec_2", "Section 2", "Second section text"),
-        ])
+        doc = _make_doc(
+            "2026-SB00093-FC00044",
+            [
+                _make_section("sec_1", "Section 1", "First section text"),
+                _make_section("sec_2", "Section 2", "Second section text"),
+            ],
+        )
         result = diff_documents(doc, None)
         assert result.compared_against == "none"
         assert result.sections_added == 2
         assert result.sections_removed == 0
         assert result.sections_modified == 0
-        assert all(
-            d.delta_type == "added" for d in result.section_deltas
-        )
+        assert all(d.delta_type == "added" for d in result.section_deltas)
 
     def test_identical_documents(self):
         sections = [
@@ -66,16 +63,18 @@ class TestSectionDiffer:
         assert result.section_deltas[0].delta_type == "unchanged"
 
     def test_modified_section(self):
-        prior = _make_doc("2026-SB00093-FC00031", [
-            _make_section(
-                "sec_1", "Section 1", "Original text about transportation"
-            ),
-        ])
-        current = _make_doc("2026-SB00093-FC00044", [
-            _make_section(
-                "sec_1", "Section 1", "Modified text about transit services"
-            ),
-        ])
+        prior = _make_doc(
+            "2026-SB00093-FC00031",
+            [
+                _make_section("sec_1", "Section 1", "Original text about transportation"),
+            ],
+        )
+        current = _make_doc(
+            "2026-SB00093-FC00044",
+            [
+                _make_section("sec_1", "Section 1", "Modified text about transit services"),
+            ],
+        )
         result = diff_documents(current, prior)
         assert result.sections_modified == 1
         delta = result.section_deltas[0]
@@ -83,36 +82,49 @@ class TestSectionDiffer:
         assert 0 < delta.similarity_score < 1
 
     def test_added_section(self):
-        prior = _make_doc("v1", [
-            _make_section("sec_1", "Section 1", "Text"),
-        ])
-        current = _make_doc("v2", [
-            _make_section("sec_1", "Section 1", "Text"),
-            _make_section("sec_2", "Section 2", "New section"),
-        ])
+        prior = _make_doc(
+            "v1",
+            [
+                _make_section("sec_1", "Section 1", "Text"),
+            ],
+        )
+        current = _make_doc(
+            "v2",
+            [
+                _make_section("sec_1", "Section 1", "Text"),
+                _make_section("sec_2", "Section 2", "New section"),
+            ],
+        )
         result = diff_documents(current, prior)
         assert result.sections_added == 1
-        added = [
-            d for d in result.section_deltas if d.delta_type == "added"
-        ]
+        added = [d for d in result.section_deltas if d.delta_type == "added"]
         assert len(added) == 1
         assert added[0].section_id == "sec_2"
 
     def test_removed_section(self):
-        prior = _make_doc("v1", [
-            _make_section("sec_1", "Section 1", "Text"),
-            _make_section("sec_2", "Section 2", "Removed later"),
-        ])
-        current = _make_doc("v2", [
-            _make_section("sec_1", "Section 1", "Text"),
-        ])
+        prior = _make_doc(
+            "v1",
+            [
+                _make_section("sec_1", "Section 1", "Text"),
+                _make_section("sec_2", "Section 2", "Removed later"),
+            ],
+        )
+        current = _make_doc(
+            "v2",
+            [
+                _make_section("sec_1", "Section 1", "Text"),
+            ],
+        )
         result = diff_documents(current, prior)
         assert result.sections_removed == 1
 
     def test_version_ids_set(self):
-        doc = _make_doc("2026-SB00093-FC00044", [
-            _make_section("sec_1", "S1", "Text"),
-        ])
+        doc = _make_doc(
+            "2026-SB00093-FC00044",
+            [
+                _make_section("sec_1", "S1", "Text"),
+            ],
+        )
         result = diff_documents(doc, None)
         assert result.current_version_id == "2026-SB00093-FC00044"
         assert result.prior_version_id is None

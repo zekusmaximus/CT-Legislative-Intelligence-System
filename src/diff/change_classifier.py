@@ -63,28 +63,30 @@ def _classify_delta(delta: SectionDelta) -> list[ChangeEvent]:
     events: list[ChangeEvent] = []
 
     if delta.delta_type == "added":
-        events.append(ChangeEvent(
-            change_flag="new_section_added",
-            section_id=delta.section_id,
-            old_text_summary="",
-            new_text_summary=_summarize(delta.new_text or ""),
-            practical_effect="New legislative language added",
-            confidence=0.9,
-        ))
-        # Check for specific content in added section
-        events.extend(
-            _detect_content_flags(delta, delta.new_text or "")
+        events.append(
+            ChangeEvent(
+                change_flag="new_section_added",
+                section_id=delta.section_id,
+                old_text_summary="",
+                new_text_summary=_summarize(delta.new_text or ""),
+                practical_effect="New legislative language added",
+                confidence=0.9,
+            )
         )
+        # Check for specific content in added section
+        events.extend(_detect_content_flags(delta, delta.new_text or ""))
 
     elif delta.delta_type == "removed":
-        events.append(ChangeEvent(
-            change_flag="section_removed",
-            section_id=delta.section_id,
-            old_text_summary=_summarize(delta.old_text or ""),
-            new_text_summary="",
-            practical_effect="Legislative language removed",
-            confidence=0.9,
-        ))
+        events.append(
+            ChangeEvent(
+                change_flag="section_removed",
+                section_id=delta.section_id,
+                old_text_summary=_summarize(delta.old_text or ""),
+                new_text_summary="",
+                practical_effect="Legislative language removed",
+                confidence=0.9,
+            )
+        )
 
     elif delta.delta_type == "modified":
         old = delta.old_text or ""
@@ -92,23 +94,27 @@ def _classify_delta(delta: SectionDelta) -> list[ChangeEvent]:
 
         # Check if it's just a technical correction
         if delta.similarity_score > 0.90:
-            events.append(ChangeEvent(
-                change_flag="technical_correction",
-                section_id=delta.section_id,
-                old_text_summary=_summarize(old),
-                new_text_summary=_summarize(new),
-                practical_effect="Minor textual changes",
-                confidence=0.8,
-            ))
+            events.append(
+                ChangeEvent(
+                    change_flag="technical_correction",
+                    section_id=delta.section_id,
+                    old_text_summary=_summarize(old),
+                    new_text_summary=_summarize(new),
+                    practical_effect="Minor textual changes",
+                    confidence=0.8,
+                )
+            )
         else:
-            events.append(ChangeEvent(
-                change_flag="substantive_amendment",
-                section_id=delta.section_id,
-                old_text_summary=_summarize(old),
-                new_text_summary=_summarize(new),
-                practical_effect="Substantive changes to section",
-                confidence=0.7,
-            ))
+            events.append(
+                ChangeEvent(
+                    change_flag="substantive_amendment",
+                    section_id=delta.section_id,
+                    old_text_summary=_summarize(old),
+                    new_text_summary=_summarize(new),
+                    practical_effect="Substantive changes to section",
+                    confidence=0.7,
+                )
+            )
 
         # Detect specific content changes
         events.extend(_detect_content_change_flags(delta, old, new))
@@ -116,9 +122,7 @@ def _classify_delta(delta: SectionDelta) -> list[ChangeEvent]:
     return events
 
 
-def _detect_content_flags(
-    delta: SectionDelta, text: str
-) -> list[ChangeEvent]:
+def _detect_content_flags(delta: SectionDelta, text: str) -> list[ChangeEvent]:
     """Detect content-specific flags in new text."""
     events: list[ChangeEvent] = []
 
@@ -132,21 +136,21 @@ def _detect_content_flags(
 
     for pattern, flag, effect in checks:
         if pattern.search(text):
-            events.append(ChangeEvent(
-                change_flag=flag,
-                section_id=delta.section_id,
-                old_text_summary="",
-                new_text_summary=_summarize(text),
-                practical_effect=effect,
-                confidence=0.7,
-            ))
+            events.append(
+                ChangeEvent(
+                    change_flag=flag,
+                    section_id=delta.section_id,
+                    old_text_summary="",
+                    new_text_summary=_summarize(text),
+                    practical_effect=effect,
+                    confidence=0.7,
+                )
+            )
 
     return events
 
 
-def _detect_content_change_flags(
-    delta: SectionDelta, old: str, new: str
-) -> list[ChangeEvent]:
+def _detect_content_change_flags(delta: SectionDelta, old: str, new: str) -> list[ChangeEvent]:
     """Detect when specific content types changed between versions."""
     events: list[ChangeEvent] = []
 
@@ -163,14 +167,16 @@ def _detect_content_change_flags(
         new_match = bool(pattern.search(new))
         if old_match or new_match:
             if old_match != new_match or (old_match and new_match):
-                events.append(ChangeEvent(
-                    change_flag=flag,
-                    section_id=delta.section_id,
-                    old_text_summary=_summarize(old),
-                    new_text_summary=_summarize(new),
-                    practical_effect=effect,
-                    confidence=0.6,
-                ))
+                events.append(
+                    ChangeEvent(
+                        change_flag=flag,
+                        section_id=delta.section_id,
+                        old_text_summary=_summarize(old),
+                        new_text_summary=_summarize(new),
+                        practical_effect=effect,
+                        confidence=0.6,
+                    )
+                )
 
     return events
 

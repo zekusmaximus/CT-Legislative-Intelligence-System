@@ -28,9 +28,7 @@ class TestAllFileCopiesParser:
     def test_dates_parsed(self):
         html = _load_fixture()
         _, rows = parse_all_filecopies_page(html, session_year=2026)
-        dates = {
-            f"{r.bill_id}-{r.file_copy_number}": r.listing_date for r in rows
-        }
+        dates = {f"{r.bill_id}-{r.file_copy_number}": r.listing_date for r in rows}
         assert dates["SB00001-2"] == date(2026, 2, 15)
         assert dates["SB00093-31"] == date(2026, 3, 1)
         assert dates["SB00093-44"] == date(2026, 3, 18)

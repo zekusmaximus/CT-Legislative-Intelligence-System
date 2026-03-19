@@ -84,9 +84,7 @@ def _generate_deep_summary(
         parts.append(f"**{heading}**: {text_preview}")
 
     if len(doc.sections) > 10:
-        parts.append(
-            f"... and {len(doc.sections) - 10} additional section(s)."
-        )
+        parts.append(f"... and {len(doc.sections) - 10} additional section(s).")
 
     # Add diff summary
     if diff and diff.compared_against != "none":
@@ -98,8 +96,7 @@ def _generate_deep_summary(
                 diff_parts.append(f"- Removed: {delta.old_heading}")
             elif delta.delta_type == "modified":
                 diff_parts.append(
-                    f"- Modified: {delta.new_heading} "
-                    f"(similarity: {delta.similarity_score:.0%})"
+                    f"- Modified: {delta.new_heading} (similarity: {delta.similarity_score:.0%})"
                 )
         if diff_parts:
             parts.append("\n**Changes from prior version:**")
@@ -166,14 +163,11 @@ def _generate_takeaways(
                 "effective_date_change",
                 "appropriation_change",
             ):
-                takeaways.append(
-                    f"{event.change_flag}: {event.practical_effect}"
-                )
+                takeaways.append(f"{event.change_flag}: {event.practical_effect}")
 
     if not takeaways:
         takeaways.append(
-            f"New bill with {len(doc.sections)} section(s) — "
-            "initial review recommended."
+            f"New bill with {len(doc.sections)} section(s) — initial review recommended."
         )
 
     return takeaways[:5]  # Cap at 5
