@@ -1,0 +1,38 @@
+# CT CGA File Copy Agent — Change Flag Taxonomy v1
+# These are the only allowed change flags. Do not invent new values.
+
+change_flags:
+  - section_added
+  - section_removed
+  - definition_changed
+  - scope_expanded
+  - scope_narrowed
+  - deadline_changed
+  - reporting_requirement_added
+  - reporting_requirement_removed
+  - penalty_added
+  - penalty_removed
+  - exemption_added
+  - exemption_removed
+  - funding_language_added
+  - funding_language_removed
+  - appropriation_added
+  - appropriation_removed
+  - rulemaking_authority_added
+  - rulemaking_authority_expanded
+  - rulemaking_authority_removed
+  - enforcement_changed
+  - ag_enforcement_only
+  - private_right_of_action_added
+  - private_right_of_action_removed
+  - licensing_requirement_added
+  - licensing_requirement_removed
+  - mandate_added
+  - mandate_removed
+  - reimbursement_changed
+  - eligibility_changed
+  - effective_date_changed
+  - sunset_added
+  - sunset_removed
+  - preemption_risk
+  - compliance_cost_risk
