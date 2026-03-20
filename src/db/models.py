@@ -218,6 +218,25 @@ class Alert(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class BillSubjectTag(Base):
+    __tablename__ = "bill_subject_tags"
+    __table_args__ = (
+        UniqueConstraint(
+            "canonical_version_id", "subject_tag",
+            name="uq_bill_subject_tag_version_tag",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    canonical_version_id: Mapped[str] = mapped_column(
+        String(30), ForeignKey("file_copies.canonical_version_id"), nullable=False
+    )
+    subject_tag: Mapped[str] = mapped_column(String(50), nullable=False)
+    tag_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class FeedbackLabel(Base):
     __tablename__ = "feedback_labels"
 

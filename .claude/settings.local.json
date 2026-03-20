@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/zeke/Desktop/Projects/CT-Legislative-Intelligence-System/docs -type f -name *.md)",
+      "Bash(DATABASE_URL=\"sqlite:///./var/ct_cga_agent.db\" python -m alembic revision --autogenerate -m \"initial schema\")",
+      "Bash(pip install:*)",
+      "Bash(DATABASE_URL=\"sqlite:///./var/ct_cga_agent.db\" python -m alembic upgrade head)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(grep -E \"\\\\.\\(yaml|yml|json\\)$\")",
+      "Bash(python -m pytest tests/ -x -v --tb=short)",
+      "Bash(python -c \"import yaml; d = yaml.safe_load\\(open\\(''config/taxonomy.change_flags.yaml''\\)\\); print\\(len\\(d[''change_flags'']\\)\\)\")",
+      "Bash(xargs grep:*)",
+      "Bash(python -m pytest tests/unit/test_client_profile_loader.py tests/unit/test_alert_decisioner.py -v)",
+      "Bash(python -m pytest tests/integration/test_persistence.py -v)",
+      "Bash(python -m pytest -v)"
+    ]
+  }
+}

@@ -62,7 +62,7 @@ Make the repository self-describing so coding agents can continue safely without
 - Future agents can identify the next build tranche without reading the full review.
 
 ### Status
-- **In progress with this revision.**
+- **Complete.** Planning docs, README, and core docs reflect the current implementation state. Future agents can identify the next build tranche from this file alone.
 
 ---
 
@@ -94,7 +94,7 @@ Turn the prototype into a real system of record.
 - Tests cover repeat processing without duplicate rows.
 
 ### Status
-- **Top-priority MVP blocker.**
+- **Complete.** Initial Alembic migration created. Repositories added for extractions, pages, sections, diffs, and change events. Pipeline persists all extraction and diff outputs. Integration tests verify queryability and idempotency.
 
 ---
 
@@ -116,7 +116,7 @@ Ensure pipeline outputs comply with the technical contract and are ready for sco
 - Diff/change artifacts are consistent enough for downstream alert logic.
 
 ### Status
-- **Immediate follow-on after Phase 1.**
+- **Complete.** Taxonomy loader reads subjects/change_flags/urgency from YAML config at runtime. Subject tagger rewritten with canonical 28 tags. Change classifier rewritten with canonical 34 flags. All outputs validated with fail-fast on invalid values. BillSubjectTag model and Alembic migration added. Bill-status enrichment wired into pipeline before scoring. Subject tags persisted during execution. Full test coverage for vocabulary compliance.
 
 ---
 
@@ -146,7 +146,8 @@ Make relevance scoring trustworthy enough for internal pilot use.
 - False-positive control is manageable for internal use.
 
 ### Status
-- **MVP-critical.**
+
+- **Complete.** YAML client-profile loader reads and validates profiles from `config/clients/`. ClientRepository, ClientBillScoreRepository, and AlertRepository added for persistence. Alert decisioner implements three suppression rules: below-threshold, duplicate (by suppression key), and cooldown (24h per client+bill). Pipeline orchestrator scores all active clients per version and persists per-client score breakdowns with reasons, urgency, and dispositions. Alert records created with deterministic suppression keys. Full test coverage: 20 unit tests (profile loader + suppression logic) and 6 integration tests (score persistence, client sync, idempotency, alert creation, dedup, suppression key checks). All 217 tests pass.
 
 ---
 
