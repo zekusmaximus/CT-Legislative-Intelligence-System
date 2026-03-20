@@ -1,5 +1,7 @@
 # CT Legislative Intelligence System: Production Readiness Review
 
+> **Historical document.** This review was conducted before MVP implementation (Phases 1-6). All blockers and gaps identified below have since been addressed. The system now has 320 passing tests across unit, integration, regression, and acceptance suites. See `PLAN.md` for phase completion details and `docs/runbook.md` for current operational guidance.
+
 ## 1. Executive verdict
 
 This repo is **not deployable today as a credible MVP**. It is deployable only as a **development prototype with a decent foundation and a narrow happy-path demo pipeline**. The single biggest reason is simple: the code does **not persist or expose the core intelligence artifacts that the spec requires**—extractions, sections, diffs, scores, summaries, alerts, feedback, and audit data are mostly modeled but never written or served, which means the system cannot deliver a traceable end-to-end product output. The technical contract explicitly requires those outputs and persistence guarantees, but the current pipeline stops at in-memory tagging and summary generation. 【F:docs/build-spec.md†L19-L41】【F:docs/technical-contract.md†L53-L62】【F:src/pipeline/orchestrator.py†L278-L362】

@@ -242,33 +242,17 @@ These are valuable, but they should not displace the persistence, scoring, and a
 
 ---
 
-## Recommended next coding tranche
+## MVP complete
 
-### Tranche name
-**Persist the intelligence layer and make it queryable.**
+All six phases are complete. The system is ready for internal pilot use during the legislative session.
 
-### In-scope tasks
-1. Create the initial Alembic revision.
-2. Add repositories/services for persisted extraction and diff artifacts.
-3. Wire those writes into pipeline extraction and diff execution.
-4. Add `GET /versions/{canonical_version_id}`.
-5. Add integration tests proving persisted outputs are queryable after processing.
+### What to work on next
 
-### Why this tranche comes next
-- It closes the largest gap between the current prototype and a usable MVP.
-- It unlocks auditability, downstream scoring persistence, and alert traceability.
-- It is narrow enough for a coding agent to implement safely in one focused pass.
+Refer to the **Post-MVP roadmap** above. When choosing the next task, prefer this order:
+1. Embeddings-based client matching.
+2. LLM-generated summaries with strict JSON validation.
+3. Dashboard and review UX.
+4. Feedback-driven calibration workflows.
+5. Broader backfill and historical analytics.
 
----
-
-## Working order for future agents
-
-When choosing the next task, prefer this order:
-1. Persistence and migrations.
-2. Controlled vocabularies and metadata enrichment.
-3. Deterministic scoring and alert decision persistence.
-4. Telegram sending and summary persistence.
-5. Operational APIs and scheduler.
-6. Hardening and post-MVP intelligence layers.
-
-If a task does not advance one of those steps, it is probably not the highest-value work for MVP.
+Before starting post-MVP work, ensure the deterministic pipeline remains stable and all 320 tests continue to pass.

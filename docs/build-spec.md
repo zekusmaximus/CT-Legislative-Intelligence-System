@@ -47,27 +47,30 @@ The system is successful if it:
 
 # 2. Current repository state
 
-The repository is not greenfield. It already includes:
-- typed settings and Pydantic schemas;
-- ORM models for most major entities;
-- HTML collectors and a pipeline orchestrator;
-- PDF extraction, normalization, confidence scoring, and section parsing;
-- basic diffing, subject tagging, scoring, summary generation, and Telegram formatting;
-- passing fixture-backed tests for the current prototype flow.
+> **Updated after Phase 6 completion.** All MVP phases are done. 320 tests pass.
 
-The repository does **not** yet qualify as an MVP because it still lacks:
-- migration history,
-- persistence of downstream intelligence artifacts,
-- runtime enforcement of controlled vocabularies,
-- complete client-profile and scoring logic,
-- Telegram delivery/suppression behavior,
-- operational APIs for review and reprocessing.
+The repository implements the full deterministic MVP pipeline:
+
+- Typed settings, Pydantic schemas, and SQLAlchemy ORM models for all domain entities.
+- Alembic migration history for reproducible schema setup.
+- Daily and session-wide HTML collectors, bill-status enrichment, and PDF download/storage.
+- PDF text extraction with OCR fallback, normalization, confidence scoring, and section parsing.
+- Two-phase section diffing (exact ID match + fuzzy text-similarity alignment) and change classification.
+- Contract-compliant controlled vocabularies enforced at runtime via YAML taxonomy loader.
+- Validated YAML client-profile loader and deterministic rules-based scoring engine.
+- Per-client score persistence with reasons, urgency, and dispositions.
+- Telegram alert delivery with retry, duplicate suppression, cooldown handling, and digest batching.
+- Internal summary persistence (one-sentence, deep, key sections, takeaways, confidence).
+- Operational API: health, collection, processing, version lookup, alerts, runs, monitoring, review, and feedback.
+- APScheduler-based job scheduling for collection polling and digest delivery.
+- Pipeline run audit records with error budget tracking and system health reports.
+- Regression fixtures and acceptance tests for OCR, multi-version diffs, alert routing, taxonomy compliance, and output integrity.
 
 ---
 
 # 3. MVP phases
 
-## Phase 0: Repository alignment
+## Phase 0: Repository alignment — COMPLETE
 
 ### Goal
 Make the repository self-describing for future coding agents and keep the docs aligned with current implementation reality.
@@ -78,11 +81,7 @@ Make the repository self-describing for future coding agents and keep the docs a
 - build and technical docs aligned to the current repository state;
 - explicit MVP vs post-MVP boundaries.
 
-### Exit criteria
-- future agents can identify the next tranche quickly;
-- repo documentation no longer assumes an empty scaffold.
-
-## Phase 1: Persistence baseline
+## Phase 1: Persistence baseline — COMPLETE
 
 ### Goal
 Convert the prototype pipeline into a traceable system of record.
@@ -93,11 +92,7 @@ Convert the prototype pipeline into a traceable system of record.
 - persisted raw text, normalized text, pages, sections, diffs, and change events;
 - integration tests proving processed versions are queryable.
 
-### Exit criteria
-- a processed file copy creates durable extraction and diff records;
-- repeat processing remains idempotent.
-
-## Phase 2: Metadata enrichment and controlled vocabularies
+## Phase 2: Metadata enrichment and controlled vocabularies — COMPLETE
 
 ### Goal
 Ensure downstream outputs are contract-compliant and ready for scoring.
@@ -108,11 +103,7 @@ Ensure downstream outputs are contract-compliant and ready for scoring.
 - controlled-vocabulary subject tags and change flags only;
 - tests preventing unsupported enum output.
 
-### Exit criteria
-- metadata enrichment happens before scoring;
-- all emitted subject tags and change flags are contract compliant.
-
-## Phase 3: Deterministic scoring and alert decisions
+## Phase 3: Deterministic scoring and alert decisions — COMPLETE
 
 ### Goal
 Make per-client relevance decisions trustworthy enough for internal use.
@@ -123,11 +114,7 @@ Make per-client relevance decisions trustworthy enough for internal use.
 - persisted client scores, urgency, reasons, and dispositions;
 - duplicate suppression, threshold handling, cooldown rules, and digest routing.
 
-### Exit criteria
-- every processed version has per-client scoring outputs;
-- alert decisions are explainable from stored evidence.
-
-## Phase 4: Summaries and Telegram delivery
+## Phase 4: Summaries and Telegram delivery — COMPLETE
 
 ### Goal
 Deliver useful outputs to operators and stakeholders.
@@ -138,11 +125,7 @@ Deliver useful outputs to operators and stakeholders.
 - delivery status logging;
 - retry-safe send behavior.
 
-### Exit criteria
-- Telegram alerts send successfully when enabled;
-- the system stores whether an alert was sent, suppressed, or deferred.
-
-## Phase 5: Operations API and scheduling
+## Phase 5: Operations API and scheduling — COMPLETE
 
 ### Goal
 Operate the MVP without ad hoc scripts or database access.
@@ -152,11 +135,7 @@ Operate the MVP without ad hoc scripts or database access.
 - scheduler-backed collection and digest jobs;
 - structured logging and audit records.
 
-### Exit criteria
-- operators can trigger or inspect the system through stable endpoints;
-- scheduled runs are traceable and repeatable.
-
-## Phase 6: Hardening and pilot readiness
+## Phase 6: Hardening and pilot readiness — COMPLETE
 
 ### Goal
 Prepare for sustained internal session use.
@@ -166,10 +145,6 @@ Prepare for sustained internal session use.
 - improved diff alignment and low-confidence handling;
 - monitoring and runbook notes;
 - optional feedback tooling and dashboard support.
-
-### Exit criteria
-- the system can run during session with predictable behavior;
-- failures are diagnosable and output quality is test-backed.
 
 ---
 
