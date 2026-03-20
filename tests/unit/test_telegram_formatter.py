@@ -54,6 +54,9 @@ def _make_summary() -> InternalSummary:
 PDF_URL = "https://www.cga.ct.gov/2026/FC/pdf/2026SB-00093-R000044-FC.PDF"
 
 
+BILL_STATUS_URL = "https://www.cga.ct.gov/asp/cgabillstatus/cgabillstatus.asp?selBillType=Bill&which_year=2026&bill_num=SB00093"
+
+
 class TestTelegramFormatter:
     def test_alert_text_contains_bill_id(self):
         text = format_alert_text(_make_score(), _make_summary())
@@ -79,6 +82,29 @@ class TestTelegramFormatter:
         text = format_alert_text(_make_score(), _make_summary())
         assert "Why this matters:" in text
 
+    def test_alert_text_contains_version(self):
+        text = format_alert_text(_make_score(), _make_summary())
+        assert "2026-SB00093-FC00044" in text
+
+    def test_alert_text_contains_client_disposition(self):
+        text = format_alert_text(_make_score(), _make_summary())
+        assert "client1" in text
+        assert "immediate" in text
+
+    def test_alert_text_contains_pdf_link(self):
+        text = format_alert_text(
+            _make_score(), _make_summary(),
+            file_copy_pdf_url=PDF_URL,
+        )
+        assert f"PDF: {PDF_URL}" in text
+
+    def test_alert_text_contains_bill_status_link(self):
+        text = format_alert_text(
+            _make_score(), _make_summary(),
+            bill_status_url=BILL_STATUS_URL,
+        )
+        assert f"Bill page: {BILL_STATUS_URL}" in text
+
     def test_build_payload(self):
         payload = build_alert_payload(_make_score(), _make_summary(), PDF_URL)
         assert payload.client_id == "client1"
@@ -86,6 +112,14 @@ class TestTelegramFormatter:
         assert payload.urgency == "high"
         assert len(payload.suppression_key) == 16
         assert len(payload.alert_text) > 0
+
+    def test_build_payload_includes_links(self):
+        payload = build_alert_payload(
+            _make_score(), _make_summary(), PDF_URL,
+            bill_status_url=BILL_STATUS_URL,
+        )
+        assert PDF_URL in payload.alert_text
+        assert BILL_STATUS_URL in payload.alert_text
 
     def test_suppression_key_deterministic(self):
         p1 = build_alert_payload(_make_score(), _make_summary(), PDF_URL)

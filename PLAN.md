@@ -174,7 +174,8 @@ Produce actionable outputs and deliver them reliably.
 - Users can inspect why a message was or was not sent.
 
 ### Status
-- **MVP-critical.**
+
+- **Complete.** BillSummary model persists internal summaries (one-sentence, deep, key sections, takeaways, confidence) with JSON round-trip for list fields. Alert model extended with delivery tracking columns (delivery_status, delivery_attempts, last_delivery_attempt_at, delivery_error). SummaryRepository added with idempotent save by canonical_version_id. TelegramSender implements Bot API sending with retry-safe behavior (max 3 attempts), delivery status tracking (pending/sent/failed/skipped), and digest mode for batched alerts. Pipeline orchestrator persists summaries during score_and_summarize, builds full alert payloads with bill number, version, client/disposition context, reasons, and PDF/status links, and delivers alerts via Telegram when configured. Alembic migration added for bill_summaries table and alert delivery columns. Telegram formatter enhanced with version, client, disposition, and link fields. Full test coverage: 11 unit tests (sender disabled/enabled, retry, max attempts, batch, digest) and 6 integration tests (summary persistence, idempotency, JSON round-trip, delivery fields, alert text context, mock Telegram delivery). All 239 tests pass.
 
 ---
 

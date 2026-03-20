@@ -76,7 +76,7 @@ class AlertRepository:
 
     def mark_sent(self, alert_id: int, telegram_message_id: str) -> None:
         """Update an alert as sent."""
-        alert = self.session.query(Alert).get(alert_id)
+        alert = self.session.get(Alert, alert_id)
         if alert:
             alert.sent_at = datetime.now(UTC)
             alert.telegram_message_id = telegram_message_id

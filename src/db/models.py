@@ -215,6 +215,34 @@ class Alert(Base):
     telegram_message_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     suppression_key: Mapped[str] = mapped_column(String(200), nullable=False)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivery_status: Mapped[str] = mapped_column(
+        String(20), default="pending", server_default="pending"
+    )
+    delivery_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_delivery_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivery_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class BillSummary(Base):
+    __tablename__ = "bill_summaries"
+    __table_args__ = (
+        UniqueConstraint(
+            "canonical_version_id",
+            name="uq_bill_summary_version_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    canonical_version_id: Mapped[str] = mapped_column(
+        String(30), ForeignKey("file_copies.canonical_version_id"), nullable=False
+    )
+    bill_id: Mapped[str] = mapped_column(String(10), nullable=False)
+    one_sentence_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    deep_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    key_sections_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    practical_takeaways_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

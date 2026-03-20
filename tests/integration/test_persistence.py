@@ -3,12 +3,12 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pymupdf
 
 from src.collectors.cga_daily_filecopies import parse_daily_filecopies_page
-from src.db.models import BillDiff, BillSubjectTag, BillTextExtraction
+from src.db.models import Alert, BillDiff, BillSubjectTag, BillSummary, BillTextExtraction
 from src.db.repositories.bills import BillRepository
 from src.db.repositories.diffs import DiffRepository
 from src.db.repositories.extractions import ExtractionRepository
@@ -16,6 +16,7 @@ from src.db.repositories.file_copies import FileCopyRepository
 from src.db.repositories.sections import SectionRepository
 from src.db.repositories.source_pages import SourcePageRepository
 from src.db.repositories.subject_tags import SubjectTagRepository
+from src.db.repositories.summaries import SummaryRepository
 from src.metadata.taxonomy import load_subject_tags
 from src.pipeline.orchestrator import Pipeline
 from src.utils.storage import LocalStorage
@@ -788,3 +789,272 @@ class TestBillStatusEnrichment:
         # Bill record should have status_url set
         updated_bill = bill_repo.get_by_bill_id(2026, "SB00093")
         assert updated_bill.bill_status_url is not None
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: Summary persistence and Telegram delivery tests
+# ---------------------------------------------------------------------------
+
+
+class TestSummaryPersistence:
+    def test_summary_persisted_after_pipeline(self, db_session):
+        """After pipeline, summary records are stored in the DB."""
+        daily_html = DAILY_FIXTURE.read_text()
+        pdf_bytes = _create_fake_pdf(
+            "Section 1. This act shall take effect July 1, 2026.\n"
+            "The Commissioner of Transportation shall establish "
+            "a municipal transit pilot program for microtransit."
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = LocalStorage(tmpdir)
+            fetcher = _make_mock_fetcher(daily_html, pdf_bytes)
+            pipeline = Pipeline(
+                db_session=db_session, storage=storage,
+                fetcher=fetcher, session_year=2026,
+            )
+
+            results = pipeline.run_daily()
+            assert len(results) > 0
+
+            canonical_id = results[0]["canonical_id"]
+            summary_repo = SummaryRepository(db_session)
+            summary_row = summary_repo.get_by_canonical_id(canonical_id)
+
+            assert summary_row is not None
+            assert summary_row.one_sentence_summary != ""
+            assert summary_row.deep_summary != ""
+            assert summary_row.confidence > 0
+
+    def test_summary_idempotent(self, db_session):
+        """Saving the same summary twice does not create duplicates."""
+        bill_repo = BillRepository(db_session)
+        bill = bill_repo.upsert(2026, "HB00200", "Summary Idempotent Test")
+        fc_repo = FileCopyRepository(db_session)
+        fc_repo.create_if_new(bill.id, 2026, "HB00200", 1, "http://example.com/t.pdf")
+        db_session.commit()
+
+        from src.schemas.summary import InternalSummary
+
+        summary = InternalSummary(
+            bill_id="HB00200",
+            version_id="2026-HB00200-FC00001",
+            one_sentence_summary="Test bill summary.",
+            deep_summary="Detailed test summary.",
+            key_sections_to_review=["Section 1"],
+            practical_takeaways=["New section added."],
+            confidence=0.75,
+        )
+
+        summary_repo = SummaryRepository(db_session)
+        s1 = summary_repo.save_summary(summary)
+        db_session.commit()
+
+        s2 = summary_repo.save_summary(summary)
+        db_session.commit()
+
+        assert s1.id == s2.id
+        count = (
+            db_session.query(BillSummary)
+            .filter_by(canonical_version_id="2026-HB00200-FC00001")
+            .count()
+        )
+        assert count == 1
+
+    def test_summary_json_round_trip(self, db_session):
+        """Key sections and takeaways survive JSON round-trip."""
+        bill_repo = BillRepository(db_session)
+        bill = bill_repo.upsert(2026, "HB00201", "Summary JSON Test")
+        fc_repo = FileCopyRepository(db_session)
+        fc_repo.create_if_new(bill.id, 2026, "HB00201", 1, "http://example.com/t.pdf")
+        db_session.commit()
+
+        from src.schemas.summary import InternalSummary
+
+        original = InternalSummary(
+            bill_id="HB00201",
+            version_id="2026-HB00201-FC00001",
+            one_sentence_summary="Test.",
+            deep_summary="Deep test.",
+            key_sections_to_review=["Section 1", "Section 2"],
+            practical_takeaways=["Takeaway A", "Takeaway B"],
+            confidence=0.8,
+        )
+
+        summary_repo = SummaryRepository(db_session)
+        summary_repo.save_summary(original)
+        db_session.commit()
+
+        row = summary_repo.get_by_canonical_id("2026-HB00201-FC00001")
+        assert row is not None
+
+        restored = summary_repo.to_internal_summary(row)
+        assert restored.key_sections_to_review == ["Section 1", "Section 2"]
+        assert restored.practical_takeaways == ["Takeaway A", "Takeaway B"]
+        assert restored.confidence == 0.8
+
+
+class TestAlertDeliveryTracking:
+    def test_alert_delivery_fields_after_pipeline(self, db_session, tmp_path):
+        """After pipeline with client profiles, alert records have delivery fields."""
+        import yaml
+
+        client_dir = tmp_path / "clients"
+        client_dir.mkdir()
+        with open(client_dir / "delivery_test.yaml", "w") as f:
+            yaml.dump({
+                "client_id": "delivery_test",
+                "client_name": "Delivery Test Corp",
+                "is_active": True,
+                "alert_threshold": 20,
+                "digest_threshold": 10,
+                "positive_keywords": ["transportation", "transit", "microtransit",
+                                       "paratransit", "mobility"],
+                "subject_priorities": {"transportation": 1.0},
+                "watched_bills": [],
+            }, f)
+
+        daily_html = DAILY_FIXTURE.read_text()
+        pdf_bytes = _create_fake_pdf(
+            "Section 1. An act concerning transportation transit "
+            "microtransit paratransit mobility network companies."
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = LocalStorage(tmpdir)
+            fetcher = _make_mock_fetcher(daily_html, pdf_bytes)
+            pipeline = Pipeline(
+                db_session=db_session,
+                storage=storage,
+                fetcher=fetcher,
+                session_year=2026,
+                client_config_dir=client_dir,
+            )
+
+            results = pipeline.run_daily()
+            assert len(results) > 0
+
+        from src.db.repositories.clients import ClientRepository
+
+        client = ClientRepository(db_session).get_by_client_id("delivery_test")
+        assert client is not None
+
+        alerts = db_session.query(Alert).filter_by(client_id_fk=client.id).all()
+        assert len(alerts) > 0
+        alert = alerts[0]
+        # Delivery fields should exist with defaults (no telegram sender configured)
+        assert alert.delivery_status in ("pending", "skipped")
+        assert alert.delivery_attempts >= 0
+
+    def test_alert_text_includes_version_and_links(self, db_session, tmp_path):
+        """Alert text includes version, client, and link context."""
+        import yaml
+
+        client_dir = tmp_path / "clients"
+        client_dir.mkdir()
+        with open(client_dir / "link_test.yaml", "w") as f:
+            yaml.dump({
+                "client_id": "link_test",
+                "client_name": "Link Test Corp",
+                "is_active": True,
+                "alert_threshold": 20,
+                "digest_threshold": 10,
+                "positive_keywords": ["transportation", "transit", "microtransit",
+                                       "paratransit", "mobility"],
+                "subject_priorities": {"transportation": 1.0},
+                "watched_bills": [],
+            }, f)
+
+        daily_html = DAILY_FIXTURE.read_text()
+        pdf_bytes = _create_fake_pdf(
+            "Section 1. An act concerning transportation transit "
+            "microtransit paratransit mobility network companies."
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = LocalStorage(tmpdir)
+            fetcher = _make_mock_fetcher(daily_html, pdf_bytes)
+            pipeline = Pipeline(
+                db_session=db_session,
+                storage=storage,
+                fetcher=fetcher,
+                session_year=2026,
+                client_config_dir=client_dir,
+            )
+
+            results = pipeline.run_daily()
+            assert len(results) > 0
+
+        from src.db.repositories.clients import ClientRepository
+
+        client = ClientRepository(db_session).get_by_client_id("link_test")
+        alerts = db_session.query(Alert).filter_by(client_id_fk=client.id).all()
+        assert len(alerts) > 0
+        alert = alerts[0]
+
+        # Alert text should include version, client, and disposition context
+        assert "link_test" in alert.alert_text
+        assert "FC" in alert.alert_text  # version includes FC number
+
+    def test_telegram_delivery_with_mock_sender(self, db_session, tmp_path):
+        """Pipeline with TelegramSender sends alerts and marks them sent."""
+        import yaml
+        from src.alerts.telegram_sender import TelegramSender
+
+        client_dir = tmp_path / "clients"
+        client_dir.mkdir()
+        with open(client_dir / "tg_test.yaml", "w") as f:
+            yaml.dump({
+                "client_id": "tg_test",
+                "client_name": "TG Test Corp",
+                "is_active": True,
+                "alert_threshold": 20,
+                "digest_threshold": 10,
+                "positive_keywords": ["transportation", "transit", "microtransit",
+                                       "paratransit", "mobility"],
+                "subject_priorities": {"transportation": 1.0},
+                "watched_bills": [],
+            }, f)
+
+        daily_html = DAILY_FIXTURE.read_text()
+        pdf_bytes = _create_fake_pdf(
+            "Section 1. An act concerning transportation transit "
+            "microtransit paratransit mobility network companies."
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = LocalStorage(tmpdir)
+            fetcher = _make_mock_fetcher(daily_html, pdf_bytes)
+
+            # Create a TelegramSender that we can mock
+            tg_sender = TelegramSender(
+                bot_token="fake_token",
+                default_chat_id="123",
+                session=db_session,
+                enabled=True,
+            )
+
+            pipeline = Pipeline(
+                db_session=db_session,
+                storage=storage,
+                fetcher=fetcher,
+                session_year=2026,
+                client_config_dir=client_dir,
+                telegram_sender=tg_sender,
+            )
+
+            with patch.object(tg_sender, "_call_send_message", return_value="999"):
+                results = pipeline.run_daily()
+
+            assert len(results) > 0
+
+        from src.db.repositories.clients import ClientRepository
+
+        client = ClientRepository(db_session).get_by_client_id("tg_test")
+        alerts = db_session.query(Alert).filter_by(client_id_fk=client.id).all()
+
+        # At least one alert should have been delivered
+        sent_alerts = [a for a in alerts if a.delivery_status == "sent"]
+        assert len(sent_alerts) > 0
+        assert sent_alerts[0].telegram_message_id == "999"
+        assert sent_alerts[0].sent_at is not None

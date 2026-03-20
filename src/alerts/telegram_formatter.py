@@ -27,7 +27,11 @@ def build_alert_payload(
     bill_status_url: str | None = None,
 ) -> TelegramAlertPayload:
     """Build a TelegramAlertPayload from scoring and summary."""
-    alert_text = format_alert_text(score, summary)
+    alert_text = format_alert_text(
+        score, summary,
+        file_copy_pdf_url=file_copy_pdf_url,
+        bill_status_url=bill_status_url,
+    )
 
     suppression_key = hashlib.sha256(f"{score.client_id}:{score.version_id}".encode()).hexdigest()[
         :16
@@ -48,12 +52,20 @@ def build_alert_payload(
 def format_alert_text(
     score: ClientScoreResult,
     summary: InternalSummary,
+    file_copy_pdf_url: str = "",
+    bill_status_url: str | None = None,
 ) -> str:
-    """Format a plain-text alert message."""
+    """Format a plain-text alert message with full context.
+
+    Includes: bill number/title, file-copy version, client/disposition context,
+    concise reasons, and links to PDF and bill page.
+    """
     urgency_label = _URGENCY_EMOJI.get(score.urgency, "INFO")
     lines = [
         f"[{urgency_label}] Legislative Alert",
         f"Bill: {score.bill_id}",
+        f"Version: {score.version_id}",
+        f"Client: {score.client_id} | Disposition: {score.alert_disposition}",
         f"Score: {score.final_score:.0f}/100 | Urgency: {score.urgency}",
         "",
         summary.one_sentence_summary,
@@ -70,6 +82,13 @@ def format_alert_text(
         lines.append("Why this matters:")
         for reason in score.match_reasons[:3]:
             lines.append(f"  - {reason.reason_text}")
+        lines.append("")
+
+    # Links
+    if file_copy_pdf_url:
+        lines.append(f"PDF: {file_copy_pdf_url}")
+    if bill_status_url:
+        lines.append(f"Bill page: {bill_status_url}")
 
     return "\n".join(lines)
 

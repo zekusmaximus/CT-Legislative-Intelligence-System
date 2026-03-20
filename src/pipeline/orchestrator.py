@@ -15,6 +15,8 @@ from src.collectors.cga_all_filecopies import parse_all_filecopies_page
 from src.collectors.cga_bill_status import parse_bill_status_page
 from src.collectors.cga_daily_filecopies import parse_daily_filecopies_page
 from src.collectors.http_fetcher import CGAFetcher
+from src.alerts.telegram_sender import TelegramSender
+from src.db.models import Alert
 from src.db.repositories.alerts import AlertRepository
 from src.db.repositories.bills import BillRepository
 from src.db.repositories.clients import ClientRepository
@@ -25,6 +27,7 @@ from src.db.repositories.scores import ClientBillScoreRepository
 from src.db.repositories.sections import SectionRepository
 from src.db.repositories.source_pages import SourcePageRepository
 from src.db.repositories.subject_tags import SubjectTagRepository
+from src.db.repositories.summaries import SummaryRepository
 from src.diff.change_classifier import classify_changes
 from src.diff.section_differ import diff_documents
 from src.extract.confidence import (
@@ -63,12 +66,14 @@ class Pipeline:
         fetcher: CGAFetcher | None = None,
         session_year: int = 2026,
         client_config_dir: Path | None = None,
+        telegram_sender: TelegramSender | None = None,
     ):
         self.db = db_session
         self.storage = storage
         self.fetcher = fetcher or CGAFetcher()
         self.session_year = session_year
         self.client_config_dir = client_config_dir
+        self.telegram_sender = telegram_sender
 
         self.bill_repo = BillRepository(db_session)
         self.fc_repo = FileCopyRepository(db_session)
@@ -77,6 +82,7 @@ class Pipeline:
         self.section_repo = SectionRepository(db_session)
         self.diff_repo = DiffRepository(db_session)
         self.tag_repo = SubjectTagRepository(db_session)
+        self.summary_repo = SummaryRepository(db_session)
         self.client_repo = ClientRepository(db_session)
         self.score_repo = ClientBillScoreRepository(db_session)
         self.alert_repo = AlertRepository(db_session)
@@ -348,15 +354,19 @@ class Pipeline:
         diff_result: BillDiffResult,
         bill_title: str = "",
     ) -> dict:
-        """Run subject tagging, summary generation, and persist tags."""
+        """Run subject tagging, summary generation, and persist tags + summary."""
         tags = tag_bill_version(doc, diff_result)
         summary = generate_summary(doc, diff_result, bill_title=bill_title)
 
         # Persist subject tags
         self.tag_repo.save_tags(tags)
+
+        # Persist summary
+        self.summary_repo.save_summary(summary)
+
         self.db.commit()
         logger.info(
-            "Persisted %d subject tags for %s",
+            "Persisted %d subject tags and summary for %s",
             len(tags.subject_tags),
             doc.canonical_version_id,
         )
@@ -417,14 +427,19 @@ class Pipeline:
             # Create alert record for non-duplicate decisions
             alert_row = None
             if decision.should_create_alert:
-                alert_text = format_alert_text(score, summary)
+                payload = build_alert_payload(
+                    score=score,
+                    summary=summary,
+                    file_copy_pdf_url=pdf_url,
+                    bill_status_url=bill_status_url,
+                )
                 alert_row = self.alert_repo.create_alert(
                     client_db_id=client_row.id,
                     bill_db_id=bill_db_id,
                     canonical_version_id=score.version_id,
                     urgency=score.urgency,
                     alert_disposition=decision.final_disposition,
-                    alert_text=alert_text,
+                    alert_text=payload.alert_text,
                     suppression_key=decision.suppression_key,
                 )
 
@@ -444,6 +459,37 @@ class Pipeline:
 
         self.db.commit()
         return results
+
+    # ------------------------------------------------------------------
+    # Stage 8: Deliver alerts via Telegram
+    # ------------------------------------------------------------------
+    def deliver_alerts(self, client_results: list[dict]) -> dict:
+        """Send pending alerts via Telegram. Returns delivery summary."""
+        if not self.telegram_sender:
+            logger.info("No Telegram sender configured, skipping delivery")
+            return {"sent": 0, "failed": 0, "skipped": 0}
+
+        alerts_to_send: list = []
+        for cr in client_results:
+            alert_id = cr.get("alert_id")
+            if not alert_id:
+                continue
+            decision = cr.get("decision")
+            if decision and decision.final_disposition in ("immediate", "digest"):
+                alert = self.db.get(Alert, alert_id)
+                if alert:
+                    alerts_to_send.append(alert)
+
+        if not alerts_to_send:
+            return {"sent": 0, "failed": 0, "skipped": 0}
+
+        result = self.telegram_sender.send_pending_alerts(alerts_to_send)
+        self.db.commit()
+        logger.info(
+            "Alert delivery: sent=%d failed=%d skipped=%d",
+            result["sent"], result["failed"], result["skipped"],
+        )
+        return result
 
     def _sync_clients_to_db(self, profiles: list[ClientProfile]) -> None:
         """Ensure all client profiles are represented in the DB."""
@@ -576,6 +622,15 @@ class Pipeline:
             logger.info(
                 "Scored %d clients for %s", len(client_results), canonical_id
             )
+
+            # Deliver alerts via Telegram
+            try:
+                delivery = self.deliver_alerts(client_results)
+                result["delivery"] = delivery
+            except Exception as e:
+                logger.warning("Alert delivery failed for %s: %s", canonical_id, e)
+                result["delivery"] = {"sent": 0, "failed": 0, "skipped": 0, "error": str(e)}
+
         except Exception as e:
             logger.warning("Client scoring failed for %s: %s", canonical_id, e)
             result["client_scores"] = []
