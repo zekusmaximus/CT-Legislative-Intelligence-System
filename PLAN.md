@@ -201,7 +201,8 @@ Make the MVP operable during session without direct database access.
 - Logs support debugging and post-run review.
 
 ### Status
-- **Required for internal deployability, but after Phases 1-4.**
+
+- **Complete.** FastAPI expanded with operational endpoints: `GET /health` (with DB check), `POST /jobs/collect/daily`, `POST /jobs/process/{canonical_version_id}`, `GET /versions/{canonical_version_id}`, `GET /alerts` (with delivery_status/urgency filters and pagination), and `GET /runs`. PipelineRun model and Alembic migration added for run-level audit records. PipelineRunRepository tracks run lifecycle (start → complete/fail) with entry counts and alert totals. Pipeline orchestrator updated: `run_daily()`, `run_reconciliation()`, and new `process_single_version()` all create audit records. APScheduler-based scheduler added with interval-based daily collection and cron-based weekday digest delivery at 18:00. Worker CLI extended with `scheduler` command. Full test coverage: 11 API unit tests (health, versions, alerts with filters, runs, process 404), 8 pipeline run repository tests, 2 scheduler configuration tests, 5 pipeline audit integration tests (daily/reconciliation tracking, failure recording, idempotency). All 265 tests pass.
 
 ---
 

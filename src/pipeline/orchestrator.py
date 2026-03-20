@@ -16,13 +16,14 @@ from src.collectors.cga_bill_status import parse_bill_status_page
 from src.collectors.cga_daily_filecopies import parse_daily_filecopies_page
 from src.collectors.http_fetcher import CGAFetcher
 from src.alerts.telegram_sender import TelegramSender
-from src.db.models import Alert
+from src.db.models import Alert, Bill
 from src.db.repositories.alerts import AlertRepository
 from src.db.repositories.bills import BillRepository
 from src.db.repositories.clients import ClientRepository
 from src.db.repositories.diffs import DiffRepository
 from src.db.repositories.extractions import ExtractionRepository
 from src.db.repositories.file_copies import FileCopyRepository
+from src.db.repositories.pipeline_runs import PipelineRunRepository
 from src.db.repositories.scores import ClientBillScoreRepository
 from src.db.repositories.sections import SectionRepository
 from src.db.repositories.source_pages import SourcePageRepository
@@ -86,6 +87,7 @@ class Pipeline:
         self.client_repo = ClientRepository(db_session)
         self.score_repo = ClientBillScoreRepository(db_session)
         self.alert_repo = AlertRepository(db_session)
+        self.run_repo = PipelineRunRepository(db_session)
 
     # ------------------------------------------------------------------
     # Stage 1: Collect daily file copies
@@ -523,44 +525,123 @@ class Pipeline:
     # ------------------------------------------------------------------
     def run_daily(self) -> list[dict]:
         """Run the full daily pipeline. Returns results for each new FC."""
-        results: list[dict] = []
+        run = self.run_repo.start_run("daily")
+        self.db.commit()
+        logger.info("Pipeline run started: id=%d type=daily", run.id)
 
-        # Collect
-        rows = self.collect_daily()
-        if not rows:
-            logger.info("No new file copies to process")
+        try:
+            results = self._run_collection_pipeline(self.collect_daily, run.id)
             return results
-
-        # Persist
-        new_entries = self.persist_rows(rows)
-        if not new_entries:
-            logger.info("No new entries after dedup")
-            return results
-
-        # Process each new entry
-        for entry in new_entries:
-            result = self._process_entry(entry)
-            if result:
-                results.append(result)
-
-        logger.info("Pipeline complete: processed %d entries", len(results))
-        return results
+        except Exception as e:
+            self.run_repo.fail_run(run.id, str(e))
+            self.db.commit()
+            logger.error("Pipeline run %d failed: %s", run.id, e)
+            raise
 
     def run_reconciliation(self) -> list[dict]:
         """Run full reconciliation pipeline using all-FC page."""
+        run = self.run_repo.start_run("reconciliation")
+        self.db.commit()
+        logger.info("Pipeline run started: id=%d type=reconciliation", run.id)
+
+        try:
+            results = self._run_collection_pipeline(self.collect_all, run.id)
+            return results
+        except Exception as e:
+            self.run_repo.fail_run(run.id, str(e))
+            self.db.commit()
+            logger.error("Pipeline run %d failed: %s", run.id, e)
+            raise
+
+    def process_single_version(self, canonical_version_id: str) -> dict | None:
+        """Process a single file copy version through extraction, diff, scoring.
+
+        Used by the API to reprocess or process a specific version on demand.
+        """
+        fc = self.fc_repo.get_by_canonical_id(canonical_version_id)
+        if not fc:
+            logger.warning("File copy not found: %s", canonical_version_id)
+            return None
+
+        run = self.run_repo.start_run("single")
+        self.db.commit()
+        logger.info(
+            "Single-version run started: id=%d version=%s",
+            run.id, canonical_version_id,
+        )
+
+        try:
+            bill = self.db.get(Bill, fc.bill_id_fk)
+            entry = {
+                "bill_id": bill.bill_id if bill else "UNKNOWN",
+                "file_copy_number": fc.file_copy_number,
+                "pdf_url": fc.pdf_url,
+                "canonical_id": fc.canonical_version_id,
+                "bill_db_id": fc.bill_id_fk,
+            }
+
+            result = self._process_entry(entry)
+            alerts_sent = 0
+            if result and "delivery" in result:
+                alerts_sent = result["delivery"].get("sent", 0)
+
+            self.run_repo.complete_run(
+                run.id,
+                entries_collected=1,
+                entries_processed=1 if result else 0,
+                entries_failed=0 if result else 1,
+                alerts_sent=alerts_sent,
+            )
+            self.db.commit()
+            return result
+
+        except Exception as e:
+            self.run_repo.fail_run(run.id, str(e))
+            self.db.commit()
+            logger.error("Single-version run %d failed: %s", run.id, e)
+            raise
+
+    def _run_collection_pipeline(self, collect_fn, run_id: int) -> list[dict]:
+        """Shared logic for daily/reconciliation runs with audit tracking."""
         results: list[dict] = []
 
-        rows = self.collect_all()
+        rows = collect_fn()
         if not rows:
+            logger.info("No new file copies to process")
+            self.run_repo.complete_run(run_id, entries_collected=0)
+            self.db.commit()
             return results
 
         new_entries = self.persist_rows(rows)
+        if not new_entries:
+            logger.info("No new entries after dedup")
+            self.run_repo.complete_run(run_id, entries_collected=len(rows))
+            self.db.commit()
+            return results
+
+        failed = 0
+        total_alerts_sent = 0
         for entry in new_entries:
             result = self._process_entry(entry)
             if result:
                 results.append(result)
+                if "delivery" in result:
+                    total_alerts_sent += result["delivery"].get("sent", 0)
+            else:
+                failed += 1
 
-        logger.info("Reconciliation complete: %d entries", len(results))
+        self.run_repo.complete_run(
+            run_id,
+            entries_collected=len(rows),
+            entries_processed=len(results),
+            entries_failed=failed,
+            alerts_sent=total_alerts_sent,
+        )
+        self.db.commit()
+        logger.info(
+            "Pipeline run %d complete: collected=%d processed=%d failed=%d alerts=%d",
+            run_id, len(rows), len(results), failed, total_alerts_sent,
+        )
         return results
 
     def _process_entry(self, entry: dict) -> dict | None:

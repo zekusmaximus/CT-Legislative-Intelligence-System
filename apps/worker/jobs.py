@@ -65,9 +65,12 @@ def main():
     elif command == "reconcile":
         count = run_reconciliation()
         print(f"Reconciliation: processed {count} entries")
+    elif command == "scheduler":
+        from apps.worker.scheduler import main as scheduler_main
+        scheduler_main()
     else:
         print(f"Unknown command: {command}")
-        print("Usage: python -m apps.worker.jobs [daily|reconcile]")
+        print("Usage: python -m apps.worker.jobs [daily|reconcile|scheduler]")
         sys.exit(1)
 
 
