@@ -151,9 +151,8 @@ def _classify_delta(delta: SectionDelta) -> list[ChangeEvent]:
 
         # If no specific flags were detected, classify generically
         if not events:
-            if delta.similarity_score > 0.90:
-                # Very minor change — not a canonical flag, so we skip it.
-                # Only specific canonical flags are emitted.
+            if delta.similarity_score > 0.95:
+                # Truly minor change (typo-level) — skip
                 pass
             else:
                 # Check for scope changes as a fallback for substantive mods
@@ -256,11 +255,14 @@ def _detect_modified_content_flags(
 
         if not old_match and new_match:
             flag = added_flag
+            conf = 0.75  # new content detected — higher confidence
         elif old_match and not new_match:
             flag = removed_flag
+            conf = 0.70  # removal detected
         elif old_match and new_match:
             # Both present but text changed — use the "added" / changed variant
             flag = added_flag
+            conf = 0.55  # both present, lower confidence change is meaningful
         else:
             continue
 
@@ -273,7 +275,7 @@ def _detect_modified_content_flags(
                     old_summary=_summarize(old),
                     new_summary=_summarize(new),
                     effect=effect,
-                    confidence=0.6,
+                    confidence=conf,
                 )
             )
 

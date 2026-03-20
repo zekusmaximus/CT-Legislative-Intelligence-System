@@ -1,4 +1,4 @@
-"""FastAPI application — operational API surface for Phase 5."""
+"""FastAPI application — operational API surface for Phase 5+6."""
 
 import json
 import logging
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="CT CGA File Copy Intelligence Agent",
-    version="0.5.0",
+    version="0.6.0",
     description="Legislative monitoring and alerting system for CT General Assembly file copies.",
 )
 
@@ -370,6 +370,275 @@ def list_runs(
         )
         for r in runs
     ]
+
+
+# ---------------------------------------------------------------------------
+# GET /monitoring/health — system health report
+# ---------------------------------------------------------------------------
+
+
+class ErrorBudgetResponse(BaseModel):
+    window_hours: int
+    pipeline_runs_total: int
+    pipeline_runs_failed: int
+    pipeline_failure_rate: float
+    pipeline_budget_remaining: float
+    delivery_attempts_total: int
+    delivery_failures: int
+    delivery_failure_rate: float
+    delivery_budget_remaining: float
+    avg_extraction_confidence: float | None
+    extraction_below_target: bool
+    healthy: bool
+
+
+class SystemHealthResponse(BaseModel):
+    status: str
+    last_successful_run: str | None
+    hours_since_last_run: float | None
+    pending_alerts: int
+    failed_alerts: int
+    error_budget: ErrorBudgetResponse
+
+
+@app.get("/monitoring/health", response_model=SystemHealthResponse)
+def system_health(db: DB):
+    from src.monitoring import get_system_health
+
+    report = get_system_health(db)
+    return SystemHealthResponse(
+        status=report.status,
+        last_successful_run=report.last_successful_run.isoformat() if report.last_successful_run else None,
+        hours_since_last_run=round(report.hours_since_last_run, 2) if report.hours_since_last_run is not None else None,
+        pending_alerts=report.pending_alerts,
+        failed_alerts=report.failed_alerts,
+        error_budget=ErrorBudgetResponse(
+            window_hours=report.error_budget.window_hours,
+            pipeline_runs_total=report.error_budget.pipeline_runs_total,
+            pipeline_runs_failed=report.error_budget.pipeline_runs_failed,
+            pipeline_failure_rate=round(report.error_budget.pipeline_failure_rate, 4),
+            pipeline_budget_remaining=round(report.error_budget.pipeline_budget_remaining, 4),
+            delivery_attempts_total=report.error_budget.delivery_attempts_total,
+            delivery_failures=report.error_budget.delivery_failures,
+            delivery_failure_rate=round(report.error_budget.delivery_failure_rate, 4),
+            delivery_budget_remaining=round(report.error_budget.delivery_budget_remaining, 4),
+            avg_extraction_confidence=round(report.error_budget.avg_extraction_confidence, 4) if report.error_budget.avg_extraction_confidence is not None else None,
+            extraction_below_target=report.error_budget.extraction_below_target,
+            healthy=report.error_budget.healthy,
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /review/version/{canonical_version_id} — detailed review view
+# ---------------------------------------------------------------------------
+
+
+class ReviewVersionResponse(BaseModel):
+    canonical_version_id: str
+    bill_id: str
+    bill_title: str
+    session_year: int
+    file_copy_number: int
+    extraction_confidence: float | None
+    sections: list[dict]
+    diff_summary: dict | None
+    change_events: list[dict]
+    subject_tags: list[str]
+    summary: dict | None
+    client_scores: list[dict]
+    alerts: list[dict]
+
+
+@app.get("/review/version/{canonical_version_id}", response_model=ReviewVersionResponse)
+def review_version(canonical_version_id: str, db: DB):
+    """Detailed review of a processed version — all artifacts in one call."""
+    from src.db.models import BillChangeEvent, BillSubjectTag, Client, ClientBillScore
+
+    fc = db.query(FileCopy).filter_by(canonical_version_id=canonical_version_id).first()
+    if not fc:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    bill = db.get(Bill, fc.bill_id_fk)
+
+    # Extraction
+    extraction = (
+        db.query(BillTextExtraction)
+        .filter_by(canonical_version_id=canonical_version_id)
+        .first()
+    )
+
+    # Sections
+    sections = (
+        db.query(BillSection)
+        .filter_by(canonical_version_id=canonical_version_id)
+        .order_by(BillSection.start_char)
+        .all()
+    )
+    sections_data = [
+        {"section_id": s.section_id, "heading": s.heading, "start_page": s.start_page, "end_page": s.end_page}
+        for s in sections
+    ]
+
+    # Diff
+    diff = (
+        db.query(BillDiff)
+        .filter_by(current_version_id=canonical_version_id)
+        .first()
+    )
+    diff_data = None
+    change_events_data = []
+    if diff:
+        diff_data = {
+            "sections_added": diff.sections_added,
+            "sections_removed": diff.sections_removed,
+            "sections_modified": diff.sections_modified,
+            "compared_against": diff.compared_against,
+            "prior_version_id": diff.prior_version_id,
+        }
+        events = (
+            db.query(BillChangeEvent)
+            .filter_by(bill_diff_id=diff.id)
+            .all()
+        )
+        change_events_data = [
+            {
+                "change_flag": e.change_flag,
+                "section_id": e.section_id,
+                "practical_effect": e.practical_effect,
+                "confidence": e.confidence,
+            }
+            for e in events
+        ]
+
+    # Subject tags
+    tags = (
+        db.query(BillSubjectTag)
+        .filter_by(canonical_version_id=canonical_version_id)
+        .all()
+    )
+    tag_names = [t.subject_tag for t in tags]
+
+    # Summary
+    summary = (
+        db.query(BillSummary)
+        .filter_by(canonical_version_id=canonical_version_id)
+        .first()
+    )
+    summary_data = None
+    if summary:
+        key_sections = summary.key_sections_json
+        if isinstance(key_sections, str):
+            key_sections = json.loads(key_sections)
+        takeaways = summary.practical_takeaways_json
+        if isinstance(takeaways, str):
+            takeaways = json.loads(takeaways)
+        summary_data = {
+            "one_sentence": summary.one_sentence_summary,
+            "deep_summary": summary.deep_summary,
+            "key_sections": key_sections,
+            "practical_takeaways": takeaways,
+            "confidence": summary.confidence,
+        }
+
+    # Scores
+    scores = (
+        db.query(ClientBillScore, Client.client_id)
+        .join(Client, ClientBillScore.client_id_fk == Client.id)
+        .filter(ClientBillScore.canonical_version_id == canonical_version_id)
+        .all()
+    )
+    scores_data = [
+        {
+            "client_id": cid,
+            "final_score": s.final_score,
+            "urgency": s.urgency,
+            "should_alert": s.should_alert,
+            "alert_disposition": s.alert_disposition,
+        }
+        for s, cid in scores
+    ]
+
+    # Alerts
+    alerts = (
+        db.query(Alert)
+        .filter_by(canonical_version_id=canonical_version_id)
+        .all()
+    )
+    alerts_data = [
+        {
+            "id": a.id,
+            "urgency": a.urgency,
+            "disposition": a.alert_disposition,
+            "delivery_status": a.delivery_status or "pending",
+            "delivery_attempts": a.delivery_attempts or 0,
+        }
+        for a in alerts
+    ]
+
+    return ReviewVersionResponse(
+        canonical_version_id=canonical_version_id,
+        bill_id=bill.bill_id if bill else "UNKNOWN",
+        bill_title=bill.current_title if bill else "",
+        session_year=fc.session_year,
+        file_copy_number=fc.file_copy_number,
+        extraction_confidence=extraction.overall_extraction_confidence if extraction else None,
+        sections=sections_data,
+        diff_summary=diff_data,
+        change_events=change_events_data,
+        subject_tags=tag_names,
+        summary=summary_data,
+        client_scores=scores_data,
+        alerts=alerts_data,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /feedback — capture operator feedback on alert decisions
+# ---------------------------------------------------------------------------
+
+
+class FeedbackRequest(BaseModel):
+    client_id: str
+    bill_id: str
+    canonical_version_id: str
+    label: str  # "relevant" or "not_relevant"
+    notes: str = ""
+
+
+class FeedbackResponse(BaseModel):
+    id: int
+    status: str
+
+
+@app.post("/feedback", response_model=FeedbackResponse)
+def submit_feedback(body: FeedbackRequest, db: DB):
+    """Capture operator feedback for future scoring calibration."""
+    from src.db.models import Client, FeedbackLabel
+
+    client = db.query(Client).filter_by(client_id=body.client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail=f"Client {body.client_id} not found")
+
+    bill = db.query(Bill).filter_by(bill_id=body.bill_id).first()
+    if not bill:
+        raise HTTPException(status_code=404, detail=f"Bill {body.bill_id} not found")
+
+    if body.label not in ("relevant", "not_relevant"):
+        raise HTTPException(status_code=400, detail="Label must be 'relevant' or 'not_relevant'")
+
+    feedback = FeedbackLabel(
+        client_id_fk=client.id,
+        bill_id_fk=bill.id,
+        canonical_version_id=body.canonical_version_id,
+        label=body.label,
+        notes=body.notes,
+    )
+    db.add(feedback)
+    db.commit()
+    db.refresh(feedback)
+
+    return FeedbackResponse(id=feedback.id, status="saved")
 
 
 # ---------------------------------------------------------------------------

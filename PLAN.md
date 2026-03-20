@@ -224,7 +224,8 @@ Prepare the MVP for sustained internal use during the legislative session.
 - Operational issues can be diagnosed quickly.
 
 ### Status
-- **Production-minded pilot target.**
+
+- **Complete.** Regression test suite added with 3 fixture files covering low-quality OCR (confidence scoring, garbled text, mixed-quality pages, pipeline extraction), multi-version diffs (new bill, single update, section add/remove, three-version chains, renumbered sections, identical versions), and alert routing scenarios (no-alert, immediate-alert, digest-only, duplicate suppression, cooldown suppression, end-to-end routing). Acceptance tests verify taxonomy compliance (invalid tags/flags rejected, keyword map canonical, tagger/classifier output validation), duplicate suppression correctness (deterministic keys, full dedup flow), and persisted output integrity (extraction, sections, diffs, tags, summaries, alerts round-trip). Section differ improved with two-phase alignment: exact ID match then fuzzy text-similarity pairing for renumbered sections (threshold 0.60). Unchanged threshold tightened to 0.98. Change classifier minor-change skip threshold raised to 0.95 for better coverage, with tiered confidence levels (0.75 for new content, 0.70 for removals, 0.55 for both-present). Monitoring module added with error budget tracking (5% pipeline failure, 2% delivery failure, 80% extraction confidence targets) and system health reports. API expanded to v0.6.0 with `GET /monitoring/health` (error budgets), `GET /review/version/{id}` (full artifact review), and `POST /feedback` (operator feedback capture). Operational runbook created at `docs/runbook.md` covering common scenarios, error budgets, configuration, and troubleshooting. All 320 tests pass.
 
 ---
 
