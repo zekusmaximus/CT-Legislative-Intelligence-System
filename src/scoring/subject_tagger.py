@@ -9,6 +9,7 @@ from src.metadata.taxonomy import load_subject_tags, validate_subject_tags
 from src.schemas.diff import BillDiffResult
 from src.schemas.extraction import ExtractedDocument
 from src.schemas.scoring import SubjectTagResult
+from src.utils.bill_id import bill_id_from_canonical
 
 # Canonical subject taxonomy: maps each approved tag to keyword patterns.
 # Only tags present in config/taxonomy.subjects.yaml may appear as keys.
@@ -345,9 +346,10 @@ def tag_bill_version(
     validate_subject_tags(tags)
 
     # Extract change flags from diff result (already validated by classifier)
+    # sorted() for deterministic ordering across runs
     change_flags: list[str] = []
     if diff_result:
-        change_flags = list({e.change_flag for e in diff_result.change_events})
+        change_flags = sorted({e.change_flag for e in diff_result.change_events})
 
     # Confidence based on keyword coverage
     if tags:
@@ -356,9 +358,7 @@ def tag_bill_version(
         confidence = 0.3
 
     return SubjectTagResult(
-        bill_id=doc.canonical_version_id.rsplit("-", 1)[0]
-        if "-" in doc.canonical_version_id
-        else doc.canonical_version_id,
+        bill_id=bill_id_from_canonical(doc.canonical_version_id),
         version_id=doc.canonical_version_id,
         subject_tags=tags,
         change_flags=change_flags,

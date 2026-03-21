@@ -1,6 +1,6 @@
 # CT Legislative Intelligence System: Production Readiness Review
 
-> **Historical document.** This review was conducted before MVP implementation (Phases 1-6). All blockers and gaps identified below have since been addressed. The system now has 320 passing tests across unit, integration, regression, and acceptance suites. See `PLAN.md` for phase completion details and `docs/runbook.md` for current operational guidance.
+> **Historical document.** This review was conducted before MVP implementation (Phases 1-6). Many of the blockers below were addressed during later phases, but this file is not the current beta-readiness verdict. See `README.md`, `PLAN.md`, and `docs/runbook.md` for current setup guidance and remaining hardening items.
 
 ## 1. Executive verdict
 

@@ -225,7 +225,17 @@ Prepare the MVP for sustained internal use during the legislative session.
 
 ### Status
 
-- **Complete.** Regression test suite added with 3 fixture files covering low-quality OCR (confidence scoring, garbled text, mixed-quality pages, pipeline extraction), multi-version diffs (new bill, single update, section add/remove, three-version chains, renumbered sections, identical versions), and alert routing scenarios (no-alert, immediate-alert, digest-only, duplicate suppression, cooldown suppression, end-to-end routing). Acceptance tests verify taxonomy compliance (invalid tags/flags rejected, keyword map canonical, tagger/classifier output validation), duplicate suppression correctness (deterministic keys, full dedup flow), and persisted output integrity (extraction, sections, diffs, tags, summaries, alerts round-trip). Section differ improved with two-phase alignment: exact ID match then fuzzy text-similarity pairing for renumbered sections (threshold 0.60). Unchanged threshold tightened to 0.98. Change classifier minor-change skip threshold raised to 0.95 for better coverage, with tiered confidence levels (0.75 for new content, 0.70 for removals, 0.55 for both-present). Monitoring module added with error budget tracking (5% pipeline failure, 2% delivery failure, 80% extraction confidence targets) and system health reports. API expanded to v0.6.0 with `GET /monitoring/health` (error budgets), `GET /review/version/{id}` (full artifact review), and `POST /feedback` (operator feedback capture). Operational runbook created at `docs/runbook.md` covering common scenarios, error budgets, configuration, and troubleshooting. All 320 tests pass.
+- **Complete.** Regression test suite added with 3 fixture files covering low-quality OCR (confidence scoring, garbled text, mixed-quality pages, pipeline extraction), multi-version diffs (new bill, single update, section add/remove, three-version chains, renumbered sections, identical versions), and alert routing scenarios (no-alert, immediate-alert, digest-only, duplicate suppression, cooldown suppression, end-to-end routing). Acceptance tests verify taxonomy compliance (invalid tags/flags rejected, keyword map canonical, tagger/classifier output validation), duplicate suppression correctness (deterministic keys, full dedup flow), and persisted output integrity (extraction, sections, diffs, tags, summaries, alerts round-trip). Section differ improved with two-phase alignment: exact ID match then fuzzy text-similarity pairing for renumbered sections (threshold 0.60). Unchanged threshold tightened to 0.98. Change classifier minor-change skip threshold raised to 0.95 for better coverage, with tiered confidence levels (0.75 for new content, 0.70 for removals, 0.55 for both-present). Monitoring module added with error budget tracking (5% pipeline failure, 2% delivery failure, 80% extraction confidence targets) and system health reports. API expanded to v0.6.0 with `GET /monitoring/health` (error budgets), `GET /review/version/{id}` (full artifact review), and `POST /feedback` (operator feedback capture). Operational runbook created at `docs/runbook.md` covering common scenarios, error budgets, configuration, and troubleshooting. Recent smoke coverage also targets Alembic bootstrap, `DATABASE_URL` override, Telegram sender wiring, alert retry/reset, and bill ID parsing; re-run the suite in the target environment to refresh the current passing total.
+
+---
+
+## Pre-beta hardening checklist
+
+Before broader beta testing, finish these operational cleanup items:
+1. Re-run the smoke suite and full test suite in a clean Python 3.12 environment with runtime extras installed.
+2. Add targeted tests for the one-shot worker delivery path now that `python -m apps.worker.jobs daily|reconcile` can send alerts.
+3. Strengthen scheduler tests to assert explicit timezone, `max_instances=1`, and any future `coalesce` / misfire policy.
+4. Finish APScheduler hardening with `coalesce` and misfire handling, and decide whether multi-process deployment needs an additional lock.
 
 ---
 
@@ -244,7 +254,7 @@ These are valuable, but they should not displace the persistence, scoring, and a
 
 ## MVP complete
 
-All six phases are complete. The system is ready for internal pilot use during the legislative session.
+All six phases are complete. The deterministic MVP is implemented, and the next work should focus on the pre-beta hardening checklist above before broader beta testing.
 
 ### What to work on next
 
@@ -255,4 +265,4 @@ Refer to the **Post-MVP roadmap** above. When choosing the next task, prefer thi
 4. Feedback-driven calibration workflows.
 5. Broader backfill and historical analytics.
 
-Before starting post-MVP work, ensure the deterministic pipeline remains stable and all 320 tests continue to pass.
+Before starting post-MVP work, ensure the deterministic pipeline remains stable and the full suite continues to pass in the target environment.

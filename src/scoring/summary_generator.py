@@ -7,6 +7,7 @@ This is the rules-based layer; LLM enhancement is a future pass.
 from src.schemas.diff import BillDiffResult
 from src.schemas.extraction import ExtractedDocument
 from src.schemas.summary import InternalSummary
+from src.utils.bill_id import bill_id_from_canonical
 
 
 def generate_summary(
@@ -29,9 +30,7 @@ def generate_summary(
     confidence = min(1.0, confidence)
 
     return InternalSummary(
-        bill_id=doc.canonical_version_id.rsplit("-", 1)[0]
-        if "-" in doc.canonical_version_id
-        else doc.canonical_version_id,
+        bill_id=bill_id_from_canonical(doc.canonical_version_id),
         version_id=doc.canonical_version_id,
         one_sentence_summary=one_sentence,
         deep_summary=deep,
@@ -160,8 +159,8 @@ def _generate_takeaways(
 
         for event in diff.change_events[:5]:
             if event.change_flag in (
-                "effective_date_change",
-                "appropriation_change",
+                "effective_date_changed",
+                "appropriation_added",
             ):
                 takeaways.append(f"{event.change_flag}: {event.practical_effect}")
 

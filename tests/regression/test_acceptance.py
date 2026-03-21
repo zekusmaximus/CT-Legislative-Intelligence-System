@@ -171,8 +171,8 @@ class TestDuplicateSuppression:
         assert d1.final_disposition == "immediate"
         assert d1.should_create_alert is True
 
-        # Create the alert record
-        alert_repo.create_alert(
+        # Create the alert record and mark as sent
+        alert = alert_repo.create_alert(
             client_db_id=client.id,
             bill_db_id=bill.id,
             canonical_version_id="2026-SB00400-FC00001",
@@ -181,9 +181,10 @@ class TestDuplicateSuppression:
             alert_text="Test",
             suppression_key=d1.suppression_key,
         )
+        alert.delivery_status = "sent"
         db_session.flush()
 
-        # Second decision (same version)
+        # Second decision (same version, already sent) → suppressed
         d2 = decide_alert(score, client.id, bill.id, alert_repo)
         assert d2.final_disposition == "suppressed_duplicate"
         assert d2.should_create_alert is False

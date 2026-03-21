@@ -70,7 +70,8 @@ class TestLoadClientProfile:
         data = {"client_id": "c2"}
         path = _write_yaml(tmp_path, "c2.yaml", data)
         profile = load_client_profile(path)
-        assert profile.alert_threshold == 30.0
+        assert profile.alert_threshold == 78.0
+        assert profile.digest_threshold == 58.0
 
 
 class TestLoadAllProfiles:

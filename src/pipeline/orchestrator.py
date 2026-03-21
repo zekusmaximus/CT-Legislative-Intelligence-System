@@ -477,7 +477,9 @@ class Pipeline:
             if not alert_id:
                 continue
             decision = cr.get("decision")
-            if decision and decision.final_disposition in ("immediate", "digest"):
+            # Only send immediate alerts during normal processing;
+            # digest alerts are batched and sent by the scheduled digest job.
+            if decision and decision.final_disposition == "immediate":
                 alert = self.db.get(Alert, alert_id)
                 if alert:
                     alerts_to_send.append(alert)

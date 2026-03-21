@@ -15,6 +15,17 @@
 
 ---
 
+## First startup checklist
+
+1. Create `.env` from `.env.example` and set `DATABASE_URL` before starting any process.
+2. Run `alembic upgrade head` against that `DATABASE_URL`.
+3. Start the API locally: `uvicorn apps.api.main:app --host 127.0.0.1 --port 8000`.
+4. Start the scheduler: `python -m apps.worker.jobs scheduler`.
+
+Runtime startup no longer calls `create_all()`. If migrations have not been applied, the API and worker processes should fail rather than silently create a partial schema.
+
+---
+
 ## Error budget targets
 
 | Metric | Target | Window |
@@ -59,8 +70,9 @@ curl "localhost:8000/alerts?delivery_status=failed" | jq '.[] | {id, bill_id, de
 **Resolution**:
 - Check Telegram bot token is valid: `TELEGRAM_BOT_TOKEN` env var
 - Check chat ID: `TELEGRAM_CHAT_ID` env var
-- Reprocess the version to re-trigger delivery: `POST /jobs/process/{canonical_version_id}`
+- Reprocess the version to retry `failed` or `pending` delivery: `POST /jobs/process/{canonical_version_id}`
 - Telegram rate limits: alerts are sent with retry (max 3 attempts)
+- Already-sent alerts remain duplicate-suppressed and will not be resent on reprocess
 
 ### 3. Low extraction confidence
 
@@ -88,14 +100,16 @@ curl "localhost:8000/review/version/2026-SB00093-FC00044" | jq '.alerts'
 ```
 
 Look at the `disposition` field:
-- `suppressed_duplicate` — same client+version already alerted
+- `immediate` — sent during normal processing if Telegram delivery is enabled
+- `digest` — queued for the scheduled digest batch rather than sent immediately
+- `suppressed_duplicate` — same client+version was already sent
 - `suppressed_cooldown` — another version of the same bill alerted within 24h
 - `suppressed_below_threshold` — score didn't meet the client's threshold
 
 **Resolution**:
 - Duplicate/cooldown suppressions are working as designed
 - If the threshold is too high: edit the client YAML in `config/clients/` and lower `alert_threshold`
-- Reprocessing will not bypass duplicate suppression (by design)
+- Reprocessing can retry alerts that are still `pending` or `failed`, but it will not resend alerts already marked `sent`
 
 ### 5. Wrong or missing subject tags
 
@@ -120,6 +134,7 @@ curl "localhost:8000/review/version/{id}" | jq '.subject_tags'
 - For SQLite (dev): ensure the directory exists
 - For PostgreSQL (prod): check the connection string and that the server is running
 - Run migrations: `alembic upgrade head`
+- API, scheduler, and worker startup no longer auto-create schema objects
 
 ---
 
@@ -134,6 +149,8 @@ Start the scheduler:
 ```bash
 python -m apps.worker.jobs scheduler
 ```
+
+Current scheduler behavior now uses explicit Eastern timezone handling and `max_instances=1` on both jobs. Before broader beta use, add `coalesce` and misfire handling and consider whether a stronger lock is needed for multi-process deployment.
 
 ---
 

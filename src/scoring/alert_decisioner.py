@@ -60,13 +60,18 @@ def decide_alert(
         )
 
     # Rule 2: Duplicate suppression (same client+version)
-    if alert_repo.has_suppression_key(suppression_key):
-        return AlertDecision(
-            should_create_alert=False,
-            final_disposition="suppressed_duplicate",
-            suppression_key=suppression_key,
-            suppression_reason="Alert already exists for this client+version",
-        )
+    # Allow retry if the existing alert was never successfully sent.
+    existing_alert = alert_repo.get_by_suppression_key(suppression_key)
+    if existing_alert:
+        if existing_alert.delivery_status == "sent":
+            return AlertDecision(
+                should_create_alert=False,
+                final_disposition="suppressed_duplicate",
+                suppression_key=suppression_key,
+                suppression_reason="Alert already sent for this client+version",
+            )
+        # Existing alert is failed/pending — allow reprocessing to retry it.
+        # create_alert() will return the existing record for re-delivery.
 
     # Rule 3: Cooldown suppression (recent alert for same client+bill)
     recent = alert_repo.get_recent_for_client_bill(

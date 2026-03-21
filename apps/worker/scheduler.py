@@ -1,21 +1,25 @@
 """Session-aware scheduler for pipeline jobs.
 
 Runs daily collection on a configurable interval and digest delivery
-at a fixed time. Respects session-aware cadence: during legislative
-session, polling is more frequent.
+at a fixed time (US/Eastern). Respects session-aware cadence: during
+legislative session, polling is more frequent.
 """
 
 import logging
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+# CT General Assembly operates in US/Eastern
+_ET = ZoneInfo("America/New_York")
+
 from config.settings import get_settings
 from src.alerts.telegram_sender import TelegramSender
-from src.db.session import create_all_tables, get_session_factory
+from src.db.session import get_session_factory
 from src.pipeline.orchestrator import Pipeline
 from src.utils.storage import LocalStorage
 
@@ -36,6 +40,7 @@ def _make_pipeline(settings=None):
         telegram_sender = TelegramSender(
             bot_token=settings.telegram_bot_token,
             default_chat_id=settings.telegram_chat_id,
+            session=session,
         )
 
     return Pipeline(
@@ -48,7 +53,7 @@ def _make_pipeline(settings=None):
 
 def scheduled_daily_collection():
     """Job: run the daily collection pipeline."""
-    logger.info("Scheduled daily collection starting at %s", datetime.utcnow().isoformat())
+    logger.info("Scheduled daily collection starting at %s", datetime.now(UTC).isoformat())
     try:
         pipeline, session = _make_pipeline()
         try:
@@ -62,7 +67,7 @@ def scheduled_daily_collection():
 
 def scheduled_digest_delivery():
     """Job: deliver pending digest alerts."""
-    logger.info("Scheduled digest delivery starting at %s", datetime.utcnow().isoformat())
+    logger.info("Scheduled digest delivery starting at %s", datetime.now(UTC).isoformat())
     try:
         settings = get_settings()
         if not (settings.telegram_available and settings.telegram_alerts_enabled):
@@ -81,6 +86,7 @@ def scheduled_digest_delivery():
             sender = TelegramSender(
                 bot_token=settings.telegram_bot_token,
                 default_chat_id=settings.telegram_chat_id,
+                session=session,
             )
 
             clients = client_repo.get_active_clients()
@@ -88,9 +94,12 @@ def scheduled_digest_delivery():
             for client in clients:
                 digests = alert_repo.get_unsent_digests(client.id)
                 if digests:
-                    result = sender.send_pending_alerts(digests)
+                    success = sender.send_digest(
+                        digests, client.display_name or client.client_id
+                    )
                     session.commit()
-                    total_sent += result.get("sent", 0)
+                    if success:
+                        total_sent += len(digests)
 
             logger.info("Digest delivery complete: %d alerts sent", total_sent)
         finally:
@@ -102,25 +111,30 @@ def scheduled_digest_delivery():
 def create_scheduler() -> BlockingScheduler:
     """Create and configure the APScheduler instance."""
     settings = get_settings()
-    scheduler = BlockingScheduler()
+    scheduler = BlockingScheduler(timezone=_ET)
 
     poll_minutes = settings.cga_poll_interval_minutes
 
-    # Daily collection on interval during business hours (Mon-Fri, 8am-6pm ET)
+    # Daily collection on interval — max_instances=1 prevents overlap
+    # if a run takes longer than the interval.
     scheduler.add_job(
         scheduled_daily_collection,
         trigger=IntervalTrigger(minutes=poll_minutes),
         id="daily_collection",
         name="Daily file copy collection",
+        max_instances=1,
         replace_existing=True,
     )
 
-    # Digest delivery at 6pm ET on weekdays
+    # Digest delivery at 6pm ET on weekdays — explicit timezone
     scheduler.add_job(
         scheduled_digest_delivery,
-        trigger=CronTrigger(hour=18, minute=0, day_of_week="mon-fri"),
+        trigger=CronTrigger(
+            hour=18, minute=0, day_of_week="mon-fri", timezone=_ET
+        ),
         id="digest_delivery",
         name="Evening digest delivery",
+        max_instances=1,
         replace_existing=True,
     )
 
@@ -138,7 +152,6 @@ def main():
     )
 
     settings = get_settings()
-    create_all_tables(settings.database_url)
 
     scheduler = create_scheduler()
     logger.info("Starting scheduler...")

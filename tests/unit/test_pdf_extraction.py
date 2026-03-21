@@ -1,8 +1,12 @@
 """Tests for PDF text extraction."""
 
+import sys
+import types
+
 import pymupdf
 
 from src.extract.confidence import compute_overall_confidence, needs_ocr_fallback
+from src.extract.ocr_fallback import ocr_page_from_pdf
 from src.extract.pdf_text import extract_text_from_bytes
 
 _DEFAULT_TEXT = "Section 1. This is a test legislative bill.\n\nSection 2. Another section."
@@ -99,3 +103,36 @@ class TestConfidenceScoring:
         overall, warnings = compute_overall_confidence([])
         assert overall == 0.0
         assert "No pages" in warnings[0]
+
+
+class TestOCRFallback:
+    def test_ocr_failure_closes_pdf_handle(self, tmp_path, monkeypatch):
+        pdf_path = tmp_path / "locked.pdf"
+        pdf_path.write_bytes(_create_test_pdf("x"))
+
+        fake_pytesseract = types.ModuleType("pytesseract")
+
+        def _raise_ocr_error(_img):
+            raise RuntimeError("OCR backend unavailable")
+
+        fake_pytesseract.image_to_string = _raise_ocr_error
+
+        fake_pil = types.ModuleType("PIL")
+        fake_image = types.ModuleType("PIL.Image")
+
+        def _frombytes(*_args, **_kwargs):
+            return object()
+
+        fake_image.frombytes = _frombytes
+        fake_pil.Image = fake_image
+
+        monkeypatch.setitem(sys.modules, "pytesseract", fake_pytesseract)
+        monkeypatch.setitem(sys.modules, "PIL", fake_pil)
+        monkeypatch.setitem(sys.modules, "PIL.Image", fake_image)
+
+        result = ocr_page_from_pdf(str(pdf_path), 1)
+
+        assert result is None
+
+        pdf_path.unlink()
+        assert not pdf_path.exists()

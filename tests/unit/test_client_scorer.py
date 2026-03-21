@@ -89,7 +89,7 @@ class TestClientScorer:
         )
         tags = _make_tag_result(
             subjects=["transportation"],
-            change_flags=["effective_date_change"],
+            change_flags=["effective_date_changed"],
         )
         result = score_bill_for_client(
             client,
@@ -122,7 +122,7 @@ class TestClientScorer:
         )
         tags = _make_tag_result(
             subjects=["transportation", "environment"],
-            change_flags=["effective_date_change", "appropriation_change"],
+            change_flags=["effective_date_changed", "appropriation_added"],
         )
         result = score_bill_for_client(
             client,

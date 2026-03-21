@@ -18,6 +18,7 @@ class ClientProfile:
         committees_of_interest: list[str] | None = None,
         watched_bills: list[str] | None = None,
         alert_threshold: float = 30.0,
+        digest_threshold: float | None = None,
     ):
         self.client_id = client_id
         self.keywords = [k.lower() for k in (keywords or [])]
@@ -25,6 +26,10 @@ class ClientProfile:
         self.committees_of_interest = [c.lower() for c in (committees_of_interest or [])]
         self.watched_bills = watched_bills or []
         self.alert_threshold = alert_threshold
+        # digest_threshold defaults to alert_threshold if not specified,
+        # giving a two-tier model: digest_threshold <= score < alert_threshold → digest,
+        # score >= alert_threshold → immediate.
+        self.digest_threshold = digest_threshold if digest_threshold is not None else alert_threshold
 
 
 def score_bill_for_client(
@@ -93,9 +98,9 @@ def score_bill_for_client(
     # Change flag boost (up to 10 points)
     change_boost = 0.0
     high_impact_flags = {
-        "effective_date_change",
-        "appropriation_change",
-        "penalty_change",
+        "effective_date_changed",
+        "appropriation_added",
+        "penalty_added",
     }
     for flag in tag_result.change_flags:
         if flag in high_impact_flags:
@@ -115,8 +120,10 @@ def score_bill_for_client(
     )
 
     urgency = _compute_urgency(rules_score, tag_result.change_flags)
-    should_alert = rules_score >= client.alert_threshold
-    disposition = _compute_disposition(rules_score, client.alert_threshold)
+    should_alert = rules_score >= client.digest_threshold
+    disposition = _compute_disposition(
+        rules_score, client.alert_threshold, client.digest_threshold
+    )
 
     return ClientScoreResult(
         client_id=client.client_id,
@@ -133,7 +140,7 @@ def score_bill_for_client(
 
 def _compute_urgency(score: float, change_flags: list[str]) -> str:
     """Determine urgency level based on score and change flags."""
-    if score >= 80 or "effective_date_change" in change_flags:
+    if score >= 80 or "effective_date_changed" in change_flags:
         return "critical"
     if score >= 60:
         return "high"
@@ -142,10 +149,17 @@ def _compute_urgency(score: float, change_flags: list[str]) -> str:
     return "low"
 
 
-def _compute_disposition(score: float, threshold: float) -> str:
-    """Determine alert disposition."""
-    if score < threshold:
-        return "suppressed_below_threshold"
-    if score >= 60:
+def _compute_disposition(
+    score: float, alert_threshold: float, digest_threshold: float
+) -> str:
+    """Determine alert disposition using two-tier thresholds.
+
+    - score >= alert_threshold → immediate
+    - digest_threshold <= score < alert_threshold → digest
+    - score < digest_threshold → suppressed
+    """
+    if score >= alert_threshold:
         return "immediate"
-    return "digest"
+    if score >= digest_threshold:
+        return "digest"
+    return "suppressed_below_threshold"

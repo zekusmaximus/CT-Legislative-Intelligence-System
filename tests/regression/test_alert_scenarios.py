@@ -136,11 +136,14 @@ class TestDigestOnlyScenario:
     """Mid-range score → digest disposition."""
 
     def test_moderate_score_routes_to_digest(self):
+        # Two-tier thresholds: digest_threshold=25, alert_threshold=60
+        # Score of ~35 lands in the digest band (25 <= 35 < 60).
         client = ClientProfile(
             client_id="test_moderate",
             keywords=["insurance", "coverage"],
             subject_interests=["insurance"],
-            alert_threshold=25.0,
+            alert_threshold=60.0,
+            digest_threshold=25.0,
         )
         tags = _tag_result(subjects=["insurance"])
         score = score_bill_for_client(
@@ -169,8 +172,8 @@ class TestAlertSuppressionScenarios:
         alert_repo = AlertRepository(db_session)
         suppression_key = make_suppression_key("dup_test", "2026-SB00200-FC00001")
 
-        # First alert
-        alert_repo.create_alert(
+        # First alert — mark as sent so it's a true duplicate
+        alert = alert_repo.create_alert(
             client_db_id=client.id,
             bill_db_id=bill.id,
             canonical_version_id="2026-SB00200-FC00001",
@@ -179,9 +182,10 @@ class TestAlertSuppressionScenarios:
             alert_text="Test alert",
             suppression_key=suppression_key,
         )
+        alert.delivery_status = "sent"
         db_session.flush()
 
-        # Second attempt
+        # Second attempt — should be suppressed (already sent)
         score = ClientScoreResult(
             client_id="dup_test",
             bill_id="2026-SB00200",

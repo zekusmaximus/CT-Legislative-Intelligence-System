@@ -13,6 +13,7 @@ Section alignment strategy:
 import difflib
 
 from src.schemas.diff import BillDiffResult, SectionDelta
+from src.utils.bill_id import bill_id_from_canonical
 from src.schemas.extraction import ExtractedDocument, SectionSpan
 
 # Similarity at or above this threshold is treated as unchanged.
@@ -126,9 +127,7 @@ def diff_documents(
         added += 1
 
     return BillDiffResult(
-        bill_id=current.canonical_version_id.rsplit("-", 1)[0]
-        if "-" in current.canonical_version_id
-        else current.canonical_version_id,
+        bill_id=bill_id_from_canonical(current.canonical_version_id),
         current_version_id=current.canonical_version_id,
         prior_version_id=prior.canonical_version_id,
         compared_against="prior_file_copy",
@@ -156,9 +155,7 @@ def _build_new_bill_result(doc: ExtractedDocument) -> BillDiffResult:
     ]
 
     return BillDiffResult(
-        bill_id=doc.canonical_version_id.rsplit("-", 1)[0]
-        if "-" in doc.canonical_version_id
-        else doc.canonical_version_id,
+        bill_id=bill_id_from_canonical(doc.canonical_version_id),
         current_version_id=doc.canonical_version_id,
         prior_version_id=None,
         compared_against="none",

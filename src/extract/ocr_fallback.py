@@ -25,16 +25,20 @@ def ocr_page_from_pdf(pdf_path: str, page_number: int) -> PageText | None:
         return None
 
     try:
+        # Close the PDF before invoking OCR so Windows does not keep the file
+        # handle locked if pytesseract raises.
         doc = pymupdf.open(pdf_path)
-        page = doc[page_number - 1]
+        try:
+            page = doc[page_number - 1]
 
-        # Render page to image at 300 DPI
-        mat = pymupdf.Matrix(300 / 72, 300 / 72)
-        pix = page.get_pixmap(matrix=mat)
+            # Render page to image at 300 DPI
+            mat = pymupdf.Matrix(300 / 72, 300 / 72)
+            pix = page.get_pixmap(matrix=mat)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        finally:
+            doc.close()
 
-        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
         raw_text = pytesseract.image_to_string(img)
-        doc.close()
 
         return PageText(
             page_number=page_number,

@@ -14,6 +14,14 @@ class AlertRepository:
     def __init__(self, session: Session):
         self.session = session
 
+    def get_by_suppression_key(self, suppression_key: str) -> Alert | None:
+        """Get an alert by its suppression key."""
+        return (
+            self.session.query(Alert)
+            .filter_by(suppression_key=suppression_key)
+            .first()
+        )
+
     def create_alert(
         self,
         client_db_id: int,
@@ -24,13 +32,26 @@ class AlertRepository:
         alert_text: str,
         suppression_key: str,
     ) -> Alert:
-        """Create an alert record. Idempotent by suppression_key."""
+        """Create an alert record. Idempotent by suppression_key.
+
+        If an existing alert with the same suppression_key is found and has
+        not been successfully sent, reset it for retry delivery.
+        """
         existing = (
             self.session.query(Alert)
             .filter_by(suppression_key=suppression_key)
             .first()
         )
         if existing:
+            # If already sent, return as-is (true duplicate).
+            # If failed/pending, reset for retry.
+            if existing.delivery_status not in ("sent", "skipped"):
+                existing.delivery_status = "pending"
+                existing.delivery_attempts = 0
+                existing.delivery_error = None
+                existing.alert_text = alert_text
+                existing.alert_disposition = alert_disposition
+                self.session.flush()
             return existing
 
         alert = Alert(
@@ -48,11 +69,7 @@ class AlertRepository:
 
     def has_suppression_key(self, suppression_key: str) -> bool:
         """Check if an alert with this suppression key already exists."""
-        return (
-            self.session.query(Alert)
-            .filter_by(suppression_key=suppression_key)
-            .first()
-        ) is not None
+        return self.get_by_suppression_key(suppression_key) is not None
 
     def get_recent_for_client_bill(
         self,

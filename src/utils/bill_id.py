@@ -53,6 +53,41 @@ def bill_id_to_number(bill_id: str) -> int:
     return int(bill_id[2:])
 
 
+def parse_canonical_version_id(canonical_version_id: str) -> tuple[int, str, int]:
+    """Parse a canonical version ID into its components.
+
+    Input format: {session_year}-{bill_id}-FC{file_copy_number:05d}
+    Example: "2026-SB00093-FC00044" → (2026, "SB00093", 44)
+
+    Returns:
+        Tuple of (session_year, bill_id, file_copy_number).
+
+    Raises:
+        ValueError: If the input cannot be parsed.
+    """
+    match = re.match(r"^(\d{4})-([A-Z]{2}\d{5})-FC(\d{5})$", canonical_version_id)
+    if not match:
+        raise ValueError(f"Cannot parse canonical version ID: {canonical_version_id!r}")
+    return int(match.group(1)), match.group(2), int(match.group(3))
+
+
+def bill_id_from_canonical(canonical_version_id: str) -> str:
+    """Extract the bill_id from a canonical version ID.
+
+    Example: "2026-SB00093-FC00044" → "SB00093"
+
+    Falls back to returning the full string if it doesn't match
+    the canonical format (e.g. test fixtures using short IDs).
+    """
+    match = re.match(r"^(\d{4})-([A-Z]{2}\d{5})-FC(\d{5})$", canonical_version_id)
+    if match:
+        return match.group(2)
+    # Fallback: try to strip trailing -FC segment if present
+    if "-FC" in canonical_version_id:
+        return canonical_version_id.rsplit("-FC", 1)[0]
+    return canonical_version_id
+
+
 def make_canonical_version_id(session_year: int, bill_id: str, file_copy_number: int) -> str:
     """Create a canonical version ID.
 

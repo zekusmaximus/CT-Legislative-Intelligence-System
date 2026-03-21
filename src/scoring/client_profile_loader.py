@@ -38,7 +38,8 @@ def load_client_profile(path: Path) -> ClientProfile:
     subject_interests = list((data.get("subject_priorities") or {}).keys())
     committees = data.get("committee_keywords") or []
     watched_bills = data.get("watched_bills") or []
-    alert_threshold = float(data.get("alert_threshold", 30.0))
+    alert_threshold = float(data.get("alert_threshold", 78.0))
+    digest_threshold = float(data.get("digest_threshold", 58.0))
 
     return ClientProfile(
         client_id=client_id,
@@ -47,6 +48,7 @@ def load_client_profile(path: Path) -> ClientProfile:
         committees_of_interest=committees,
         watched_bills=watched_bills,
         alert_threshold=alert_threshold,
+        digest_threshold=digest_threshold,
     )
 
 

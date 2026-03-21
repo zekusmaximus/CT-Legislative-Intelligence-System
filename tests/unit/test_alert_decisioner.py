@@ -31,9 +31,19 @@ def _make_score(
     )
 
 
-def _mock_alert_repo(has_key: bool = False, has_recent: bool = False):
+def _mock_alert_repo(
+    has_key: bool = False,
+    has_recent: bool = False,
+    existing_status: str = "sent",
+):
     repo = MagicMock()
     repo.has_suppression_key.return_value = has_key
+    if has_key:
+        existing_alert = MagicMock()
+        existing_alert.delivery_status = existing_status
+        repo.get_by_suppression_key.return_value = existing_alert
+    else:
+        repo.get_by_suppression_key.return_value = None
     repo.get_recent_for_client_bill.return_value = MagicMock() if has_recent else None
     return repo
 
@@ -111,6 +121,27 @@ class TestDecideAlert:
         decision = decide_alert(score, client_db_id=1, bill_db_id=1, alert_repo=repo)
 
         assert decision.final_disposition == "suppressed_below_threshold"
+
+    def test_failed_alert_not_suppressed_as_duplicate(self):
+        """A failed/pending alert should not be suppressed as duplicate — allow retry."""
+        score = _make_score(score=80, should_alert=True, disposition="immediate")
+        repo = _mock_alert_repo(has_key=True, existing_status="failed")
+
+        decision = decide_alert(score, client_db_id=1, bill_db_id=1, alert_repo=repo)
+
+        # Should NOT be suppressed_duplicate; should pass through to cooldown/immediate
+        assert decision.final_disposition != "suppressed_duplicate"
+        assert decision.should_create_alert is True
+
+    def test_pending_alert_not_suppressed_as_duplicate(self):
+        """A pending alert should not be suppressed as duplicate — allow retry."""
+        score = _make_score(score=80, should_alert=True, disposition="immediate")
+        repo = _mock_alert_repo(has_key=True, existing_status="pending")
+
+        decision = decide_alert(score, client_db_id=1, bill_db_id=1, alert_repo=repo)
+
+        assert decision.final_disposition != "suppressed_duplicate"
+        assert decision.should_create_alert is True
 
     def test_custom_cooldown(self):
         score = _make_score(score=80, should_alert=True, disposition="immediate")

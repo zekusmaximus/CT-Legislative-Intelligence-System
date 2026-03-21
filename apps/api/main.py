@@ -22,7 +22,7 @@ from src.db.models import (
     FileCopy,
     PipelineRun,
 )
-from src.db.session import create_all_tables, get_session_factory
+from src.db.session import get_session_factory
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +163,7 @@ def trigger_daily_collection(db: DB, settings: SettingsDep):
         telegram_sender = TelegramSender(
             bot_token=settings.telegram_bot_token,
             default_chat_id=settings.telegram_chat_id,
+            session=db,
         )
 
     pipeline = Pipeline(
@@ -207,6 +208,7 @@ def trigger_process_version(canonical_version_id: str, db: DB, settings: Setting
         telegram_sender = TelegramSender(
             bot_token=settings.telegram_bot_token,
             default_chat_id=settings.telegram_chat_id,
+            session=db,
         )
 
     pipeline = Pipeline(

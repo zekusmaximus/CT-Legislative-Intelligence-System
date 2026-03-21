@@ -47,7 +47,7 @@ The system is successful if it:
 
 # 2. Current repository state
 
-> **Updated after Phase 6 completion.** All MVP phases are done. 320 tests pass.
+> **Updated after Phase 6 completion.** The deterministic MVP is implemented. Current work should focus on pre-beta hardening and re-running the suite in the target environment rather than adding new MVP features.
 
 The repository implements the full deterministic MVP pipeline:
 
